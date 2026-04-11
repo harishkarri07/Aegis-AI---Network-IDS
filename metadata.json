@@ -1,0 +1,5 @@
+{
+  "name": "Aegis AI - Network IDS",
+  "description": "A production-grade AI-powered Network Intrusion Detection System with real-time monitoring, anomaly detection, and attack explanation.",
+  "requestFramePermissions": []
+}
