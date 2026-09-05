@@ -1,0 +1,4 @@
+allowBuilds:
+  cap: true
+  electron-winstaller: true
+  esbuild: true

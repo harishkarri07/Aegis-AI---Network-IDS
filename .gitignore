@@ -1,8 +1,68 @@
+# Dependencies
 node_modules/
-build/
+
+# Next.js & Webpack Build Outputs
+.next/
+out/
 dist/
+build/
+
+# Desktop & Electron Build Artifacts
+dist-electron/
+release/
+release-builds/
+
+# Test & Coverage
 coverage/
-.DS_Store
+.nyc_output/
+
+# Logs
 *.log
-.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Environment Variables (Keep only .env.example)
+.env
+.env.*
 !.env.example
+
+# Python Cache & Testing
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+.venv/
+
+# SQLite Databases & Runtime Logs
+siem_data.db
+siem_data.db-wal
+siem_data.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+# Build caches
+*.tsbuildinfo
+
+# Windows stray artifact
+nul
+
+# Package file backups
+*.backup
+*.backup2
+
+# Runtime validation output & stray files
+log.txt
+electron-output.txt
+runtime_report.txt
+runtime_validation.txt
+security_audit_report.txt
+query
+
+

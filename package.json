@@ -2,32 +2,55 @@
   "name": "network-ids",
   "version": "1.0.0",
   "private": true,
+  "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "compile:electron": "tsc -p electron/tsconfig.json",
+    "rebuild": "electron-rebuild",
+    "postinstall": "npm run rebuild",
+    "electron:dev": "npm run compile:electron && electron .",
+    "electron:build": "next build && npm run compile:electron && electron-builder",
+    "dist:win": "next build && npm run compile:electron && electron-builder --win",
+    "dist:mac": "next build && npm run compile:electron && electron-builder --mac",
+    "dist:linux": "next build && npm run compile:electron && electron-builder --linux",
+    "test": "tsx tests/detection.test.ts && tsx tests/probe-semantics.test.ts && tsx tests/rate-stats.test.ts && tsx tests/icmp-semantics.test.ts"
   },
   "dependencies": {
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slider": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.4.0",
+    "lucide-react": "^0.363.0",
     "next": "14.1.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.12.2",
-    "lucide-react": "^0.363.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.2",
-    "@radix-ui/react-tabs": "^1.0.4",
-    "@radix-ui/react-select": "^2.0.0",
-    "@radix-ui/react-slider": "^1.1.2",
-    "date-fns": "^3.4.0"
+    "tailwind-merge": "^2.2.2"
+  },
+  "optionalDependencies": {
+    "cap": "^0.2.1"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@electron/rebuild": "^4.2.0",
+    "@types/node": "^24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.19",
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
+    "tsx": "^4.23.12",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18 <25"
+  },
+  "allowScripts": {
+    "cap@0.2.1": true
   }
 }

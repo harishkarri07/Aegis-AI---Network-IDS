@@ -1,0 +1,12 @@
+{
+  "server_url": "http://127.0.0.1:8000",
+  "auth_token": null,
+  "poll_interval_seconds": 3,
+  "heartbeat_interval_seconds": 30,
+  "batch_size": 50,
+  "monitored_logs": [
+    "/var/log/auth.log",
+    "/var/log/secure",
+    "/var/log/syslog"
+  ]
+}

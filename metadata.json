@@ -1,5 +1,8 @@
 {
   "name": "Aegis AI - Network IDS",
-  "description": "A production-grade AI-powered Network Intrusion Detection System with real-time monitoring, anomaly detection, and attack explanation.",
-  "requestFramePermissions": []
+  "description": "A high-performance Network Intrusion Detection System and Endpoint SIEM with real-time telemetry ingestion, stateful sliding-window rules, multi-stage attack correlation, and SOC investigation dashboards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

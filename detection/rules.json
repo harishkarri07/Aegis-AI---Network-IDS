@@ -1,0 +1,186 @@
+{
+  "rules": [
+    {
+      "rule_id": "RULE-AUTH-001",
+      "name": "SSH Brute Force Attack",
+      "description": "Detected multiple consecutive SSH authentication failures from a single source within a short timeframe.",
+      "severity": "HIGH",
+      "risk_score": 80,
+      "timeframe": 120,
+      "count": 5,
+      "group_by": "source_ip",
+      "conditions": {
+        "event_type": "authentication",
+        "action": "login",
+        "status": "failure",
+        "destination_port": 22
+      },
+      "mitre_technique": "T1110.001",
+      "mitre_tactic": "Credential Access",
+      "recommendation": "Block source IP on firewall, verify fail2ban configuration, and check if any subsequent logins succeeded."
+    },
+    {
+      "rule_id": "RULE-AUTH-002",
+      "name": "Multiple Authentication Failures",
+      "description": "Multiple failed authentication attempts across any service or user account.",
+      "severity": "MEDIUM",
+      "risk_score": 60,
+      "timeframe": 60,
+      "count": 3,
+      "group_by": "source_ip",
+      "conditions": {
+        "event_type": "authentication",
+        "action": "login",
+        "status": "failure"
+      },
+      "mitre_technique": "T1110",
+      "mitre_tactic": "Credential Access",
+      "recommendation": "Inspect targeted user accounts and check for distributed credential stuffing patterns."
+    },
+    {
+      "rule_id": "RULE-AUTH-003",
+      "name": "Successful Login Following Repeated Failures",
+      "description": "Successful authentication detected from a source IP or user that recently failed multiple logins.",
+      "severity": "CRITICAL",
+      "risk_score": 95,
+      "timeframe": 300,
+      "count": 1,
+      "group_by": "source_ip",
+      "conditions": {
+        "event_type": "authentication",
+        "action": "login",
+        "status": "success"
+      },
+      "preceding_rule": "RULE-AUTH-002",
+      "mitre_technique": "T1078",
+      "mitre_tactic": "Initial Access / Persistence",
+      "recommendation": "URGENT: Possible compromised credential. Terminate active sessions, force password reset, and enable MFA immediately."
+    },
+    {
+      "rule_id": "RULE-PRIV-001",
+      "name": "Suspicious Root Privilege Escalation",
+      "description": "Execution of elevated command via sudo or su resulting in root privilege.",
+      "severity": "HIGH",
+      "risk_score": 75,
+      "timeframe": 60,
+      "count": 1,
+      "group_by": "hostname",
+      "conditions": {
+        "event_type": "privilege",
+        "action": "sudo",
+        "status": "success"
+      },
+      "mitre_technique": "T1548.003",
+      "mitre_tactic": "Privilege Escalation",
+      "recommendation": "Verify user authorization for root execution and audit the executed command line."
+    },
+    {
+      "rule_id": "RULE-PRIV-002",
+      "name": "Repeated Denied Privilege Escalation",
+      "description": "Multiple unauthorized attempts to execute commands with elevated privileges (sudo/su).",
+      "severity": "HIGH",
+      "risk_score": 85,
+      "timeframe": 120,
+      "count": 3,
+      "group_by": "username",
+      "conditions": {
+        "event_type": "privilege",
+        "action": "sudo",
+        "status": "denied"
+      },
+      "mitre_technique": "T1548",
+      "mitre_tactic": "Privilege Escalation",
+      "recommendation": "Investigate whether the account is compromised or conducting unauthorized internal reconnaissance."
+    },
+    {
+      "rule_id": "RULE-NET-001",
+      "name": "Port Scanning & Connection Sweep",
+      "description": "Rapid connection attempts across multiple destination ports or endpoints indicating reconnaissance.",
+      "severity": "MEDIUM",
+      "risk_score": 65,
+      "timeframe": 60,
+      "count": 10,
+      "group_by": "source_ip",
+      "conditions": {
+        "event_type": "connection",
+        "action": "scan"
+      },
+      "mitre_technique": "T1046",
+      "mitre_tactic": "Discovery",
+      "recommendation": "Block scanning IP at perimeter router and review host firewall egress/ingress filtering."
+    },
+    {
+      "rule_id": "RULE-AUTH-004",
+      "name": "Suspicious Direct Root Login",
+      "description": "Direct interactive login to the root/administrator account over the network.",
+      "severity": "HIGH",
+      "risk_score": 80,
+      "timeframe": 60,
+      "count": 1,
+      "group_by": "hostname",
+      "conditions": {
+        "event_type": "authentication",
+        "action": "login",
+        "username": "root",
+        "status": "success"
+      },
+      "mitre_technique": "T1078.001",
+      "mitre_tactic": "Defense Evasion",
+      "recommendation": "Disable PermitRootLogin in sshd_config and enforce standard user logins with sudo escalation."
+    },
+    {
+      "rule_id": "RULE-PROC-001",
+      "name": "Suspicious Process / Shell Execution",
+      "description": "Execution of interactive shell or reconnaissance tooling by non-standard system accounts.",
+      "severity": "HIGH",
+      "risk_score": 80,
+      "timeframe": 60,
+      "count": 1,
+      "group_by": "hostname",
+      "conditions": {
+        "event_type": "process",
+        "action": "exec",
+        "status": "warning"
+      },
+      "mitre_technique": "T1059",
+      "mitre_tactic": "Execution",
+      "recommendation": "Inspect the parent process hierarchy, dump process memory if required, and isolate the endpoint."
+    },
+    {
+      "rule_id": "RULE-AUDIT-001",
+      "name": "Repeated Access to Sensitive System Files",
+      "description": "Multiple denied attempts to read restricted system files such as shadow or security databases.",
+      "severity": "HIGH",
+      "risk_score": 75,
+      "timeframe": 120,
+      "count": 3,
+      "group_by": "hostname",
+      "conditions": {
+        "event_type": "audit",
+        "action": "access",
+        "status": "denied"
+      },
+      "mitre_technique": "T1003",
+      "mitre_tactic": "Credential Access",
+      "recommendation": "Audit file permissions, check process ancestry, and investigate the originating user session."
+    },
+    {
+      "rule_id": "RULE-AUTH-005",
+      "name": "Abnormal Geolocation / Source Network Login",
+      "description": "Authentication attempt observed from an unusual external or unexpected subnet.",
+      "severity": "MEDIUM",
+      "risk_score": 55,
+      "timeframe": 60,
+      "count": 1,
+      "group_by": "username",
+      "conditions": {
+        "event_type": "authentication",
+        "action": "login",
+        "status": "attempt"
+      },
+      "mitre_technique": "T1078.003",
+      "mitre_tactic": "Initial Access",
+      "recommendation": "Verify user's physical travel status and validate device posture."
+    }
+  ]
+}

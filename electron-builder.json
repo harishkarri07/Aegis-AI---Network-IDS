@@ -1,0 +1,76 @@
+{
+  "appId": "com.aegis.networkids",
+  "productName": "Aegis Network IDS",
+  "copyright": "Copyright © 2026 Aegis Cyber-Defense Systems",
+  "directories": {
+    "output": "release-builds"
+  },
+  "files": [
+    "out/**/*",
+    "dist-electron/**/*",
+    "package.json"
+  ],
+  "asarUnpack": [
+    "out/**/*",
+    "node_modules/cap/build/Release/cap.node"
+  ],
+  "extraResources": [
+    {
+      "from": "server",
+      "to": "server",
+      "filter": ["**/*", "!__pycache__/**"]
+    },
+    {
+      "from": "detection",
+      "to": "detection",
+      "filter": ["**/*", "!__pycache__/**"]
+    },
+    {
+      "from": "demo",
+      "to": "demo",
+      "filter": ["**/*", "!__pycache__/**"]
+    },
+    {
+      "from": "agent",
+      "to": "agent",
+      "filter": ["**/*", "!__pycache__/**"]
+    }
+  ],
+  "extraMetadata": {
+    "main": "dist-electron/electron/main.js"
+  },
+  "artifactName": "${productName}-${os}-${arch}.${ext}",
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "artifactName": "Aegis-Network-IDS-Setup.exe",
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Aegis Network IDS"
+  },
+  "mac": {
+    "target": ["dmg", "zip"],
+    "artifactName": "Aegis-Network-IDS.dmg",
+    "category": "public.app-category.utilities",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "electron/entitlements.mac.plist",
+    "entitlementsInherit": "electron/entitlements.mac.plist"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "artifactName": "Aegis-Network-IDS.AppImage",
+    "category": "Network",
+    "synopsis": "Stateful Network Intrusion Detection System",
+    "description": "Real-time network traffic analysis and threat detection engine with transparent heuristic scoring."
+  }
+}
