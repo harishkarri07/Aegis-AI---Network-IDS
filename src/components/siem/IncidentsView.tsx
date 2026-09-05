@@ -100,8 +100,8 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
         {incidents.length === 0 && (
           <Card>
             <EmptyState
-              title="No attack chains"
-              description="No multi-stage correlated incidents detected. Individual security alerts are monitored continuously."
+              title="No attack chains detected"
+              description="Network IDS capture is active. Multi-stage attack chains will appear here once correlated incidents are generated from ingested SIEM events."
             />
           </Card>
         )}

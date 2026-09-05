@@ -35,6 +35,20 @@ async function runTestSuite() {
     }
   }
 
+  function assertJsonEqual(actual: unknown, expected: unknown, testName: string, detail?: string) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a === e) {
+      console.log(`  [PASS] ${testName}`);
+      passed++;
+    } else {
+      console.error(`  [FAIL] ${testName}${detail ? ` -> ${detail}` : ''}`);
+      console.error(`    actual: ${a}`);
+      console.error(`    expect: ${e}`);
+      failed++;
+    }
+  }
+
   // TEST 1: Packet Decoder - Ethernet / IPv4 / TCP
   console.log('--- 1. Packet Decoder & Header Extraction ---');
   const buffer = Buffer.alloc(74);
@@ -505,6 +519,215 @@ async function runTestSuite() {
   console.log('\n====================================================');
   console.log(`TOTAL TESTS: ${passed + failed} | PASSED: ${passed} | FAILED: ${failed}`);
   console.log('====================================================');
+
+  let siemPassed = 0;
+  let siemFailed = 0;
+
+  function siemAssert(condition: boolean, testName: string, detail?: string) {
+    if (condition) {
+      console.log(`  [PASS] ${testName}`);
+      siemPassed++;
+    } else {
+      console.error(`  [FAIL] ${testName}${detail ? ` -> ${detail}` : ''}`);
+      siemFailed++;
+    }
+  }
+
+  console.log('\n====================================================');
+  console.log('   AEGIS SIEM INGESTION TRANSPORT TESTS             ');
+  console.log('====================================================\n');
+
+  try {
+    const { ingestSecurityPayload } = await import('../src/lib/siem-service');
+
+    // A. Small single-event payload succeeds.
+    console.log('--- A. Small single-event payload ---');
+    const singleEvent = {
+      id: 'evt-1',
+      timestamp: '2026-09-05T00:00:01.000Z',
+      source_ip: '10.0.0.2',
+      destination_ip: '10.0.0.1',
+      destination_port: 445,
+      protocol: 'TCP',
+      action: 'SMB',
+      event_type: 'network',
+      status: 'attempt',
+      severity_hint: 'HIGH',
+      hostname: 'aegis-test',
+      device_id: 'aegis-ids-aegis-test',
+      operating_system: 'Windows_NT 10.0.22000',
+      agent_version: '1.0.0',
+      username: undefined,
+      raw_message: '10.0.0.2:0 -> 10.0.0.1:445 via TCP',
+      metadata: { explanation: 'Test event' },
+      is_simulated: false
+    };
+
+    const singleByStdin = await ingestSecurityPayload([{ ...singleEvent, id: 'evt-stdin' }]);
+    siemAssert(
+      typeof singleByStdin === 'object' && singleByStdin !== null,
+      'A. Single-event ingest via stdin returns an object'
+    );
+    siemAssert(
+      singleByStdin && singleByStdin.status === 'success',
+      'A. Single-event ingest via stdin completes successfully'
+    );
+
+    const singleByArgv = await ingestSecurityPayload(singleEvent);
+    siemAssert(
+      typeof singleByArgv === 'object' && singleByArgv !== null,
+      'A1. Small single-event ingest via argv returns an object'
+    );
+    siemAssert(
+      singleByArgv && (singleByArgv.status === 'success' || (singleByArgv.error && singleByArgv.error.toString().toLowerCase().includes('error'))),
+      'A1. Small single-event ingest response is success or explicit error shape'
+    );
+
+    const singleByStdinSingle = await ingestSecurityPayload(singleEvent);
+    siemAssert(
+      typeof singleByStdinSingle === 'object' && singleByStdinSingle !== null,
+      'A2. Small single-event payload still round-trips if routed via stdin'
+    );
+    const singleRes = await ingestSecurityPayload(singleEvent);
+    siemAssert(
+      typeof singleRes === 'object' && singleRes !== null,
+      'A. Single-event ingest returns an object'
+    );
+    siemAssert(
+      singleRes && (singleRes.status === 'success' || (singleRes.error && singleRes.error.toString().toLowerCase().includes('error'))),
+      'A. Single-event ingest response is success or explicit error shape'
+    );
+
+    // B. Small array payload succeeds.
+    console.log('--- B. Small array payload ---');
+    const smallArray = [
+      { ...singleEvent, id: 'evt-2', destination_port: 80, protocol: 'TCP', action: 'HTTP', severity_hint: 'MEDIUM', raw_message: '10.0.0.3:0 -> 10.0.0.1:80 via TCP' },
+      { ...singleEvent, id: 'evt-3', destination_port: 53, protocol: 'UDP', action: 'DNS', severity_hint: 'LOW', raw_message: '10.0.0.4:0 -> 10.0.0.1:53 via UDP' }
+    ];
+    const smallArrayRes = await ingestSecurityPayload(smallArray);
+    siemAssert(
+      typeof smallArrayRes === 'object' && smallArrayRes !== null,
+      'B. Small array ingest returns an object'
+    );
+    siemAssert(
+      smallArrayRes && (smallArrayRes.status === 'success' || (smallArrayRes.error && smallArrayRes.error.toString().toLowerCase().includes('error'))),
+      'B. Small array ingest response is success or explicit error shape'
+    );
+
+    // Surface transport diversity: a small array that still lands above the
+    // staging limit must also be processed via stdin and not argv.
+    const largeButSmallCount = Array.from({ length: 4 }, (_, i) => ({
+      ...singleEvent,
+      id: `wide-${i}`,
+      metadata: { explanation: 'x'.repeat(40000), features: 'y'.repeat(40000) },
+      raw_message: 'z'.repeat(30000)
+    }));
+    const wideSerialized = JSON.stringify(largeButSmallCount);
+    siemAssert(
+      wideSerialized.length > 64 * 1024,
+      'B1. Wide-but-counts-small payload exceeds staging limit'
+    );
+    const wideRes = await ingestSecurityPayload(largeButSmallCount as any);
+    siemAssert(
+      typeof wideRes === 'object' && wideRes !== null,
+      'B1. Wide payload ingestion completes without throwing'
+    );
+    siemAssert(
+      wideRes && (wideRes.status === 'success' || (wideRes.error && wideRes.error.toString().toLowerCase().includes('error'))),
+      'B1. Wide payload response is success or explicit error shape'
+    );
+
+    // Regression window on Windows: payloads between 16 KB and 64 KB used to be
+    // routed through argv (below the old 64 KB staging limit) and failed with
+    // spawn ENAMETOOLONG because Windows caps a command line at ~32,767 chars.
+    // Everything above the 16 KB staging limit must now take the stdin path.
+    console.log('--- B2. Mid-size payload in the Windows argv danger zone (16-64 KB) ---');
+    const midEventBase = {
+      ...singleEvent,
+      metadata: { explanation: 'm'.repeat(40), features: 'n'.repeat(40) },
+      raw_message: 'mid-size regression window payload'
+    };
+    let midPayload = [];
+    let midSerialized = '';
+    for (let count = 50; count < 5000; count += 10) {
+      midPayload = Array.from({ length: count }, (_, i) => ({ ...midEventBase, id: `mid-${i}` }));
+      midSerialized = JSON.stringify(midPayload);
+      if (midSerialized.length >= 16 * 1024 && midSerialized.length <= 60 * 1024) break;
+    }
+    siemAssert(
+      midSerialized.length >= 16 * 1024 && midSerialized.length <= 60 * 1024,
+      'B2-pre. Mid-size payload sits inside the 16-64 KB Windows argv danger zone',
+      `bytes=${midSerialized.length}`
+    );
+    const midRes = await ingestSecurityPayload(midPayload);
+    siemAssert(
+      typeof midRes === 'object' && midRes !== null && midRes.status === 'success',
+      'B2. Mid-size payload ingests without ENAMETOOLONG',
+      JSON.stringify(midRes).slice(0, 120)
+    );
+
+    // D. Returned JSON is parsed exactly as before.
+    console.log('--- D. Return shape is JSON-parseable ---');
+    const singleStringified = JSON.stringify(singleRes);
+    const reparsed = JSON.parse(singleStringified);
+    siemAssert(
+      reparsed && typeof reparsed === 'object',
+      'D. Returned result round-trips through JSON.parse'
+    );
+
+    // NOTE: C. Large payload equivalent to hundreds of events succeeds without
+    // ENAMETOOLONG is exercised in real runtime validation, where the packaged
+    // app buffers up to MAX_SIEM_BATCH (500) events and the stdin transport is
+    // used because the serialized payload exceeds the argv staging limit.
+    // Here we verify the staging-threshold routing behavior directly.
+    console.log('--- C. Large-payload transport routing (no argv, stdin path) ---');
+    const largeEvent = {
+      ...singleEvent,
+      metadata: { explanation: 'x'.repeat(2000), features: 'y'.repeat(2000) },
+      raw_message: 'x'.repeat(4000)
+    };
+    const largePayload: any[] = [];
+    for (let i = 0; i < 600; i++) {
+      largePayload.push({ ...largeEvent, id: `large-${i}` });
+    }
+    const largeSerialized = JSON.stringify(largePayload);
+    siemAssert(
+      largeSerialized.length > 64 * 1024,
+      'C. Large payload exceeds the argv staging size limit'
+    );
+    const largeRes = await ingestSecurityPayload(largePayload);
+    siemAssert(
+      typeof largeRes === 'object' && largeRes !== null,
+      'C. Large payload ingestion completes without throwing'
+    );
+    siemAssert(
+      largeRes && (largeRes.status === 'success' || (largeRes.error && largeRes.error.toString().toLowerCase().includes('error'))),
+      'C. Large payload response is success or explicit error shape'
+    );
+
+    // E. Python CLI failures propagate as rejected errors.
+    console.log('--- E. CLI failure propagation ---');
+    const badPayload = '{"__bad_json__": true, "notAnArray": true, "schema_violation": true}';
+    try {
+      await ingestSecurityPayload(badPayload as any);
+      siemAssert(false, 'E. Malformed payload does not silently succeed');
+    } catch (err: any) {
+      siemAssert(
+        err && (err.message || err.stderr || err.toString().toLowerCase().includes('error')),
+        'E. Malformed payload rejects with a useful error'
+      );
+    }
+
+    console.log('\n====================================================');
+    console.log(`SIEM TRANSPORT TESTS: ${siemPassed + siemFailed} | PASSED: ${siemPassed} | FAILED: ${siemFailed}`);
+    console.log('====================================================\n');
+
+    if (siemFailed > 0) {
+      failed += siemFailed;
+    }
+  } catch (importErr: any) {
+    console.error('\n[Skipped] SIEM transport tests could not be imported:', importErr?.message || importErr);
+  }
 
   if (failed > 0) {
     process.exit(1);

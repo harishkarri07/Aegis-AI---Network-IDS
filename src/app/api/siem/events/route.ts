@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSecurityEvents } from '@/lib/siem-service';
+import { getSecurityEvents, ingestSecurityPayload } from '@/lib/siem-service';
 
 export const generateStaticParams = async () => {
   return [];
@@ -22,6 +22,16 @@ export async function GET(request: Request) {
     };
 
     const result = await getSecurityEvents(params);
+    return NextResponse.json(result);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const result = await ingestSecurityPayload(body);
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

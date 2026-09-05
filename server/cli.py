@@ -75,7 +75,13 @@ def main():
 
     # 10. ingest
     ingest_parser = subparsers.add_parser("ingest")
-    ingest_parser.add_argument("json_payload")
+    ingest_parser.add_argument("json_payload", nargs="?")
+
+    # 11. ingest-stdin
+    # Safe transport for large payloads that would exceed OS command-line limits.
+    # Reads the JSON payload from stdin instead of an argv argument.
+    ingest_stdin_parser = subparsers.add_parser("ingest-stdin")
+    ingest_stdin_parser.add_argument("--format", choices=["json", "text"], default="json")
 
     args = parser.parse_args()
 
@@ -153,7 +159,30 @@ def main():
 
     elif args.command == "ingest":
         try:
+            if args.json_payload is None:
+                raise ValueError("ingest requires a json_payload argument")
             payload = json.loads(args.json_payload)
+            if isinstance(payload, list):
+                res = ingestion.process_batch(payload)
+            elif isinstance(payload, dict) and "events" in payload:
+                res = ingestion.process_batch(payload["events"])
+            else:
+                res = ingestion.process_event(payload)
+            print(json.dumps(res))
+        except Exception as e:
+            print(json.dumps({"error": str(e)}), file=sys.stderr)
+            sys.exit(1)
+
+    elif args.command == "ingest" and not args.json_payload:
+        # Backward compatibility: argv-based ingest with no payload still
+        # raises clearly rather than executing the SIEM job. The large-payload
+        # path is ingest-stdin.
+        raise ValueError("ingest requires a json_payload argument")
+
+    elif args.command == "ingest-stdin":
+        try:
+            raw = sys.stdin.read()
+            payload = json.loads(raw)
             if isinstance(payload, list):
                 res = ingestion.process_batch(payload)
             elif isinstance(payload, dict) and "events" in payload:

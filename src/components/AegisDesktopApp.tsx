@@ -602,17 +602,6 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
                 </div>
               </div>
 
-              <Button
-                id="download-desktop-btn"
-                suppressHydrationWarning
-                variant="tertiary"
-                className="hidden lg:inline-flex text-caption"
-                onClick={() => setShowDownloadModal(true)}
-              >
-                <Download className="w-3.5 h-3.5" />
-                Desktop runner
-              </Button>
-
               <IconButton label={isSiemLoading ? 'Refreshing telemetry' : 'Refresh telemetry data'} onClick={() => refreshSiemData()} disabled={isSiemLoading}>
                 <RefreshCw className={cn('w-4 h-4', isSiemLoading && 'animate-spin')} />
               </IconButton>

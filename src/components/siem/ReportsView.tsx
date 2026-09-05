@@ -5,6 +5,7 @@ import { Copy, Check, FileSpreadsheet, RefreshCw, FileText } from 'lucide-react'
 import {
   Button,
   Card,
+  EmptyState,
   ErrorBanner,
   LoadingBlock,
   SectionHeader
@@ -88,13 +89,23 @@ export const ReportsView: React.FC = () => {
           />
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-caption text-muted">
-              <FileText className="w-4 h-4" />
-              Markdown report
-            </div>
-            <pre className="font-mono text-caption text-secondary whitespace-pre-wrap leading-relaxed overflow-x-auto">
-              {markdownReport || '(Empty report)'}
-            </pre>
+            {markdownReport ? (
+              <>
+                <div className="flex items-center gap-2 text-caption text-muted">
+                  <FileText className="w-4 h-4" />
+                  Markdown report
+                </div>
+                <pre className="font-mono text-caption text-secondary whitespace-pre-wrap leading-relaxed overflow-x-auto">
+                  {markdownReport}
+                </pre>
+              </>
+            ) : (
+              <EmptyState
+                title="No SIEM activity to report"
+                description="Reports will populate after security events, alerts, or endpoint telemetry are ingested. Network IDS capture is active and independent of SIEM reporting."
+                className="py-10"
+              />
+            )}
           </div>
         )}
       </Card>

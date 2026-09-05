@@ -27,17 +27,19 @@ function getPythonPaths(): { cliPath: string; cwd: string } {
     // In packaged app, Python backend is copied to resources/ via extraResources
     return {
       cliPath: path.join(process.resourcesPath, 'server', 'cli.py'),
-      cwd: process.resourcesPath,
+      cwd: path.join(process.resourcesPath, 'server'),
     };
   }
   // In development, run from project root
   return {
     cliPath: path.join(__dirname, '../../server/cli.py'),
-    cwd: path.join(__dirname, '../..'),
+    cwd: app.isPackaged
+      ? path.join(process.resourcesPath, 'server')
+      : path.join(__dirname, '../..'),
   };
 }
 
-function runSiemCli(args: string[]): Promise<string> {
+function runSiemCli(args: string[], stdin?: string): Promise<string> {
   const pythonBinaries = process.platform === 'win32' ? ['python', 'python3', 'py'] : ['python3', 'python'];
   const { cliPath, cwd } = getPythonPaths();
 
@@ -49,21 +51,58 @@ function runSiemCli(args: string[]): Promise<string> {
         return;
       }
       const bin = pythonBinaries[attempts++];
-      execFile(bin, [cliPath, ...args], {
-        cwd,
-        maxBuffer: 10 * 1024 * 1024,
-        env: { ...process.env, PYTHONPATH: cwd }
-      }, (err, stdout, stderr) => {
-        if (err) {
-          if ((err as any).code === 'ENOENT') {
+
+      let child;
+      if (stdin !== undefined) {
+        // Provide stdin to the child process without shell interpretation.
+        child = execFile(bin, [cliPath, ...args], {
+          cwd,
+          maxBuffer: 10 * 1024 * 1024,
+          encoding: 'utf8',
+          env: { ...process.env, PYTHONPATH: cwd }
+        });
+        if (child.stdin) {
+          child.stdin.write(stdin);
+          child.stdin.end();
+        }
+
+        let stdout = '';
+        let stderr2 = '';
+        child.stdout?.on('data', (chunk) => { stdout += String(chunk ?? ''); });
+        child.stderr?.on('data', (chunk) => { stderr2 += String(chunk ?? ''); });
+        child.on('error', (err) => {
+          if ((err as any).code === 'ENOENT' && attempts < pythonBinaries.length) {
             tryNext();
           } else {
-            reject(new Error(stderr || err.message || 'SIEM CLI failed'));
+            reject(err);
           }
-        } else {
+        });
+        child.on('close', (code) => {
+          if (code !== 0) {
+            reject(new Error(stderr2 || `SIEM CLI exited with code ${code}`));
+            return;
+          }
           resolve(stdout.trim());
-        }
-      });
+        });
+      } else {
+        child = execFile(bin, [cliPath, ...args], {
+          cwd,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, PYTHONPATH: cwd }
+        }, (err, stdout, stderr) => {
+          if (err) {
+            if ((err as any).code === 'ENOENT') {
+              tryNext();
+            } else {
+              const stderrText = String(stderr ?? '');
+              reject(new Error(stderrText || err.message || 'SIEM CLI failed'));
+            }
+          } else {
+            const stdoutText = String(stdout ?? '');
+            resolve(stdoutText.trim());
+          }
+        });
+      }
     };
     tryNext();
   });
@@ -107,6 +146,17 @@ async function handleSiemApiRequest(
       if (params.search) args.push('--search', params.search);
       const result = await runSiemCli(args);
       return { status: 200, data: result };
+    }
+
+    // Route: POST /api/siem/events (SIEM event ingestion from agents/tools).
+    // Mirrors the Next.js route handler in src/app/api/siem/events/route.ts so
+    // the packaged app (which serves static out/ and proxies /api/siem/* here)
+    // supports ingestion too. Uses ingestSecurityPayload, which routes payloads
+    // > 64 KB through the stdin transport (ingest-stdin) instead of argv.
+    if (pathname === '/api/siem/events' && method === 'POST' && reqBody) {
+      const body = JSON.parse(reqBody);
+      const result = await ingestSecurityPayload(body);
+      return { status: 200, data: JSON.stringify(result) };
     }
 
     // Route: GET /api/siem/alerts?limit=X&...

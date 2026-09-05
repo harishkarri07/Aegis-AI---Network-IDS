@@ -131,8 +131,12 @@ export const AlertsInvestigationView: React.FC<AlertsInvestigationViewProps> = (
             })}
             {filteredAlerts.length === 0 && (
               <EmptyState
-                title="No alerts found"
-                description="No alerts match the current filters."
+                title={alerts.length === 0 ? 'No SIEM alerts yet' : 'No alerts match'}
+                description={
+                  alerts.length === 0
+                    ? 'Network IDS capture is active. SIEM alerts will appear here when security events are ingested.'
+                    : 'No alerts match the current filters. Try adjusting your search or filter criteria.'
+                }
                 className="py-10"
               />
             )}

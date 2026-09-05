@@ -30,8 +30,8 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
         <Card>
           <EmptyState
             icon={Server}
-            title="No endpoints registered"
-            description="Run the Aegis endpoint agent on a monitored machine to connect it here."
+            title="No endpoints connected"
+            description="Connect an endpoint telemetry source to begin monitoring hosts here. Network capture is active and independent of endpoint registration."
             action={
               <Button
                 variant="secondary"

@@ -91,10 +91,17 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
           value={totalEvents.toLocaleString()}
           icon={Activity}
           context={
-            <span className="inline-flex items-center gap-1.5 text-caption text-success">
-              <StatusDot tone="success" />
-              Live
-            </span>
+            totalEvents > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-caption text-success">
+                <StatusDot tone="success" />
+                Live
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-caption text-muted">
+                <StatusDot tone="neutral" />
+                Waiting for telemetry
+              </span>
+            )
           }
         />
         <MetricCard
@@ -181,7 +188,7 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
                   </Chip>
                 ))}
                 {(!metrics?.event_type_distribution || Object.keys(metrics.event_type_distribution).length === 0) && (
-                  <span className="text-caption text-muted italic">Awaiting endpoint telemetry streams…</span>
+                  <span className="text-caption text-muted italic">No SIEM telemetry ingested yet — taxonomy will populate when endpoint events arrive.</span>
                 )}
               </div>
             </div>
@@ -201,7 +208,7 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
                   </div>
                 ))}
                 {(!metrics?.top_source_ips || metrics.top_source_ips.length === 0) && (
-                  <p className="text-caption text-muted italic py-2">No malicious external IPs logged yet.</p>
+                  <p className="text-caption text-muted italic py-2">No SIEM events have been ingested yet. Source IPs will appear when security telemetry is received.</p>
                 )}
               </div>
             </Card>
@@ -217,7 +224,7 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
                   </div>
                 ))}
                 {(!metrics?.top_affected_hosts || metrics.top_affected_hosts.length === 0) && (
-                  <p className="text-caption text-muted italic py-2">No endpoint telemetry logged yet.</p>
+                  <p className="text-caption text-muted italic py-2">No endpoint telemetry received yet. Host activity will appear when endpoints report in.</p>
                 )}
               </div>
             </Card>
@@ -265,8 +272,8 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
             ))}
             {recentAlerts.length === 0 && (
               <EmptyState
-                title="No active alerts"
-                description="System telemetry is within normal security thresholds."
+                title="No SIEM alerts yet"
+                description="Network IDS capture is active. SIEM alerts will appear here when security events are ingested from endpoint telemetry sources."
                 className="py-10"
               />
             )}

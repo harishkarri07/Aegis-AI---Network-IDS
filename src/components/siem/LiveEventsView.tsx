@@ -145,8 +145,12 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
           </table>
           {filteredEvents.length === 0 && (
             <EmptyState
-              title="No events match"
-              description="No security events match the current filters, or no endpoint has reported yet."
+              title={events.length === 0 ? 'No telemetry events yet' : 'No events match'}
+              description={
+                events.length === 0
+                  ? 'Waiting for an endpoint or SIEM telemetry source. Events will appear here once a monitored host begins reporting.'
+                  : 'No security events match the current filters. Try adjusting your search or filter criteria.'
+              }
               className="py-12"
             />
           )}
