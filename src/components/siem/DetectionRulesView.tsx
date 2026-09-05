@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  FileCode,
-  Shield,
-  Clock,
-  Layers,
-  Search,
-  CheckCircle,
-  AlertTriangle
-} from 'lucide-react';
 import { SIEMDetectionRule } from '@/types';
+import {
+  Card,
+  Chip,
+  EmptyState,
+  SearchInput,
+  SectionHeader,
+  SeverityChip,
+  StatusChip
+} from '../ui';
 
 interface DetectionRulesViewProps {
   rules: SIEMDetectionRule[];
@@ -31,118 +31,75 @@ export const DetectionRulesView: React.FC<DetectionRulesViewProps> = ({ rules })
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <FileCode className="w-5 h-5 text-[#00d4ff]" />
-            Active Detection Rules Repository
-          </h2>
-          <p className="text-xs text-[#7090b0] mt-0.5">
-            Deterministic, explainable security detection criteria compiled into the stateful time-window engine.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="SIEM rules"
+        description="Deterministic, explainable detection criteria evaluated by the stateful time-window engine."
+        actions={<SearchInput placeholder="Search rules, MITRE techniques…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-72" />}
+      />
 
-        <div className="w-full sm:w-72 relative">
-          <Search className="w-4 h-4 text-[#7090b0] absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search rules, MITRE techniques..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-xs text-white placeholder-[#7090b0] focus:outline-none focus:border-[#00d4ff]"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredRules.map((rule) => {
-          const isCrit = rule.severity === 'CRITICAL';
-          const isHigh = rule.severity === 'HIGH';
-          const badgeClass = isCrit
-            ? 'bg-[#ff3366] text-[#0a0e1a]'
-            : isHigh
-            ? 'bg-[#ffaa00] text-[#0a0e1a]'
-            : 'bg-[#00d4ff] text-[#0a0e1a]';
-
-          return (
-            <div
-              key={rule.rule_id}
-              className="p-5 bg-[#111827] border border-[#1e3a5f] rounded-xl space-y-4"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs text-[#00d4ff] font-bold">
-                      {rule.rule_id}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeClass}`}>
-                      {rule.severity} ({rule.risk_score})
-                    </span>
+      {filteredRules.length === 0 ? (
+        <Card>
+          <EmptyState title="No rules match" description="Try a different search term." />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredRules.map((rule) => (
+            <Card key={rule.rule_id} className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-micro font-mono text-muted">{rule.rule_id}</span>
+                    <SeverityChip severity={rule.severity} />
                   </div>
-                  <h3 className="text-sm font-bold text-white">
-                    {rule.name}
-                  </h3>
+                  <h3 className="text-caption font-semibold text-primary">{rule.name}</h3>
                 </div>
-
-                <span className="px-2 py-0.5 bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] text-[10px] font-bold rounded uppercase">
-                  Enabled
-                </span>
+                <StatusChip status={rule.enabled ? 'Enabled' : 'Disabled'} className="shrink-0" />
               </div>
 
-              <p className="text-xs text-[#b0c4de] leading-relaxed">
-                {rule.description}
-              </p>
+              <p className="text-caption text-secondary leading-relaxed">{rule.description}</p>
 
-              {/* Rule Parameters */}
-              <div className="grid grid-cols-3 gap-2 text-xs pt-1">
-                <div className="p-2 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-center">
-                  <span className="text-[10px] text-[#7090b0] uppercase font-bold block">Timeframe</span>
-                  <span className="font-mono text-white font-bold">{rule.timeframe}s</span>
-                </div>
-                <div className="p-2 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-center">
-                  <span className="text-[10px] text-[#7090b0] uppercase font-bold block">Count Threshold</span>
-                  <span className="font-mono text-white font-bold">&ge; {rule.count}</span>
-                </div>
-                <div className="p-2 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-center">
-                  <span className="text-[10px] text-[#7090b0] uppercase font-bold block">Group By</span>
-                  <span className="font-mono text-[#00d4ff] font-bold">{rule.group_by || 'global'}</span>
-                </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <MiniStat label="Timeframe" value={`${rule.timeframe}s`} mono />
+                <MiniStat label="Count threshold" value={`≥ ${rule.count}`} mono />
+                <MiniStat label="Group by" value={rule.group_by || 'global'} mono />
               </div>
 
-              {/* Conditions */}
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#7090b0] block mb-1.5">
-                  Trigger Conditions
-                </span>
+                <div className="text-caption text-muted mb-1.5">Trigger conditions</div>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(rule.conditions || {}).map(([k, v]) => (
-                    <span
-                      key={k}
-                      className="px-2 py-0.5 bg-[#1e3a5f]/50 border border-[#1e3a5f] rounded text-[11px] font-mono text-[#00ff88]"
-                    >
+                    <Chip key={k} tone="neutral" className="font-mono text-micro !py-[3px]">
                       {k}={String(v)}
-                    </span>
+                    </Chip>
                   ))}
                   {rule.preceding_rule && (
-                    <span className="px-2 py-0.5 bg-[#ffaa00]/10 border border-[#ffaa00]/30 rounded text-[11px] font-mono text-[#ffaa00]">
-                      requires_prior: {rule.preceding_rule}
-                    </span>
+                    <Chip tone="medium" className="font-mono text-micro !py-[3px]">
+                      requires prior: {rule.preceding_rule}
+                    </Chip>
                   )}
                 </div>
               </div>
 
-              {/* MITRE Mapping */}
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-[#1e3a5f]/60">
-                <span className="text-[#7090b0]">MITRE Technique:</span>
-                <span className="font-mono font-bold text-[#00d4ff]">
+              <div className="flex items-center justify-between gap-3 text-caption pt-2 border-t border-hairline-faint">
+                <span className="text-muted">MITRE mapping</span>
+                <span className="font-mono text-secondary truncate">
                   {rule.mitre_technique || 'N/A'} ({rule.mitre_tactic || 'General'})
                 </span>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
+
+function MiniStat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="p-2.5 rounded-well bg-canvas-deep border border-hairline">
+      <div className="text-micro text-muted">{label}</div>
+      <div className={'text-caption font-medium text-primary tabular-nums ' + (mono ? 'font-mono' : '')}>{value}</div>
+    </div>
+  );
+}

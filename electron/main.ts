@@ -435,7 +435,10 @@ function createWindow() {
     portServer = http.createServer((req, res) => handleRequest(req, res, outDirectory));
     portServer.listen(3000, '127.0.0.1', () => {
       console.log('[Electron] Static + SIEM API server listening on http://localhost:3000');
-      mainWindow.loadURL('http://localhost:3000/');
+      // Boot directly into the operational console (FINAL_AEGIS_UI_BLUEPRINT.md §20).
+      // The Next.js static export writes the console to out/app.html; the SPA fallback
+      // in handleRequest resolves /app to that file.
+      mainWindow.loadURL('http://localhost:3000/app');
     });
   }
 }

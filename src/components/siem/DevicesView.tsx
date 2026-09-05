@@ -1,18 +1,9 @@
 'use client';
 
 import React from 'react';
-import {
-  Server,
-  Activity,
-  Cpu,
-  Laptop,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  ShieldCheck,
-  Radio
-} from 'lucide-react';
+import { Server, Laptop } from 'lucide-react';
 import { MonitoredDevice } from '@/types';
+import { Button, Card, EmptyState, SectionHeader, StatusChip } from '../ui';
 
 interface DevicesViewProps {
   devices: MonitoredDevice[];
@@ -24,79 +15,90 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
   onRefresh
 }) => {
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-          <Server className="w-5 h-5 text-[#00ff88]" />
-          Monitored Endpoint Inventory
-        </h2>
-        <p className="text-xs text-[#7090b0] mt-0.5">
-          Registered client devices and network servers reporting live telemetry to Aegis SIEM.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Endpoints"
+        description="Registered client devices and network servers reporting live telemetry to the Aegis SIEM."
+        actions={
+          <Button variant="secondary" onClick={onRefresh}>
+            Refresh
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {devices.map((device) => {
-          const isOnline = device.status === 'ONLINE';
-
-          return (
-            <div
-              key={device.device_id}
-              className="p-5 bg-[#111827] border border-[#1e3a5f] hover:border-[#00d4ff] rounded-xl space-y-4 transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-2 rounded-lg ${isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-[#7090b0]/10 text-[#7090b0]'}`}>
-                    <Laptop className="w-5 h-5" />
+      {devices.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={Server}
+            title="No endpoints registered"
+            description="Run the Aegis endpoint agent on a monitored machine to connect it here."
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => window.open('/downloads', '_blank')}
+              >
+                Agent setup guide
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {devices.map((device) => {
+            const isOnline = device.status === 'ONLINE';
+            return (
+              <Card key={device.device_id} className="p-5 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={
+                        'flex items-center justify-center w-9 h-9 rounded-control shrink-0 ' +
+                        (isOnline ? 'bg-success-soft text-success' : 'bg-surface-2 text-muted')
+                      }
+                    >
+                      <Laptop className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-caption font-semibold text-primary truncate">{device.hostname}</h3>
+                      <span className="text-micro font-mono text-muted block truncate">{device.device_id}</span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">
-                      {device.hostname}
-                    </h3>
-                    <span className="font-mono text-[10px] text-[#7090b0] block">
-                      {device.device_id}
-                    </span>
-                  </div>
+                  <StatusChip status={device.status} />
                 </div>
 
-                <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase flex items-center gap-1.5 ${
-                  isOnline
-                    ? 'bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88]'
-                    : 'bg-[#ff3366]/10 border border-[#ff3366]/30 text-[#ff3366]'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-[#00ff88] animate-pulse' : 'bg-[#ff3366]'}`} />
-                  {device.status}
-                </span>
-              </div>
-
-              <div className="space-y-2 text-xs pt-2 border-t border-[#1e3a5f]/60">
-                <div className="flex items-center justify-between text-[#b0c4de]">
-                  <span className="text-[#7090b0]">Operating System:</span>
-                  <span className="font-medium text-white">{device.operating_system}</span>
+                <div className="space-y-2 text-caption pt-2 border-t border-hairline-faint">
+                  <Row label="Operating system" value={device.operating_system} />
+                  <Row label="Agent version" value={`v${device.agent_version || '1.0.0'}`} mono />
+                  <Row label="IP address" value={device.ip_address || '127.0.0.1'} mono />
+                  <Row label="Last heartbeat" value={`${device.last_seen.substring(11, 19)} UTC`} mono success={isOnline} />
                 </div>
-                <div className="flex items-center justify-between text-[#b0c4de]">
-                  <span className="text-[#7090b0]">Agent Version:</span>
-                  <span className="font-mono text-[#00d4ff]">v{device.agent_version || '1.0.0'}</span>
-                </div>
-                <div className="flex items-center justify-between text-[#b0c4de]">
-                  <span className="text-[#7090b0]">IP Address:</span>
-                  <span className="font-mono text-white">{device.ip_address || '127.0.0.1'}</span>
-                </div>
-                <div className="flex items-center justify-between text-[#b0c4de]">
-                  <span className="text-[#7090b0]">Last Heartbeat:</span>
-                  <span className="font-mono text-[#00ff88]">{device.last_seen.substring(11, 19)} UTC</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {devices.length === 0 && (
-          <div className="col-span-full p-12 bg-[#111827] border border-[#1e3a5f] rounded-xl text-center text-xs text-[#7090b0]">
-            No endpoints currently registered. Run the Aegis Endpoint Agent (<code className="text-[#00d4ff]">python3 agent/agent.py</code>) to connect monitored machines.
-          </div>
-        )}
-      </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
+
+function Row({
+  label,
+  value,
+  mono,
+  success
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  success?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted">{label}</span>
+      <span className={'font-medium truncate ' + (mono ? 'font-mono ' : '') + (success ? 'text-success' : 'text-primary')}>
+        {value}
+      </span>
+    </div>
+  );
+}

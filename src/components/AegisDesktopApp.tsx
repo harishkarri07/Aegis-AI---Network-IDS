@@ -6,16 +6,11 @@ import {
   Activity,
   BarChart3,
   Brain,
-  Search,
   List,
-  Play,
-  Square,
-  Clock,
   Download,
   AlertTriangle,
   Laptop,
   Terminal,
-  X,
   Layers,
   Server,
   FileCode,
@@ -24,7 +19,8 @@ import {
   Radio,
   RefreshCw,
   ArrowLeft,
-  ExternalLink
+  Clock,
+  FlaskConical
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -39,6 +35,7 @@ import {
   MonitoredDevice,
   SIEMDetectionRule
 } from '@/types';
+import { cn, Button, Chip, IconButton } from './ui';
 
 // Network IDS Components
 import { LiveMonitor } from './LiveMonitor';
@@ -56,6 +53,7 @@ import { DevicesView } from './siem/DevicesView';
 import { DetectionRulesView } from './siem/DetectionRulesView';
 import { ReportsView } from './siem/ReportsView';
 import { AttackSimulatorModal } from './siem/AttackSimulatorModal';
+import { Dialog } from './ui';
 
 type TabType =
   | 'pcap_monitor'
@@ -75,6 +73,18 @@ interface AegisDesktopAppProps {
   showWebsiteNavReturn?: boolean;
 }
 
+interface NavItem {
+  id: TabType;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: number;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
 export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopAppProps) {
   // Primary default view is the Network IDS Live Monitor
   const [activeTab, setActiveTab] = useState<TabType>('pcap_monitor');
@@ -82,6 +92,11 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
 
   // Network IDS State
   const [isRunning, setIsRunning] = useState(false);
+  // Ref mirror of isRunning so the stable flushPacketBuffer callback (driven by
+  // the periodic interval) can gate on the latest running state. Kept in sync
+  // by the effect below and updated synchronously at the start/stop handoff so
+  // the gate is correct the instant capture state changes.
+  const runningRef = useRef(false);
   const [history, setHistory] = useState<Packet[]>([]);
   const [anomalyScores, setAnomalyScores] = useState<number[]>([]);
   const [totalPackets, setTotalPackets] = useState(0);
@@ -220,6 +235,15 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
     const buffer = packetBufferRef.current;
     if (buffer.length === 0) return;
 
+    // Gate: once capture has stopped, anything still buffered is stale traffic
+    // captured before/during the stop handshake. Drop the backlog without
+    // touching history/counters/anomaly state so the console freezes at the
+    // moment capture ends instead of draining stale packets.
+    if (!runningRef.current) {
+      packetBufferRef.current = [];
+      return;
+    }
+
     // Drain up to MAX_RENDERER_BATCH packets per tick.
     // Excess packets remain in the buffer for the next 50ms flush.
     const count = Math.min(MAX_RENDERER_BATCH, buffer.length);
@@ -278,6 +302,11 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
     }
   }, []);
 
+  // Keep runningRef in sync with the latest isRunning state.
+  useEffect(() => {
+    runningRef.current = isRunning;
+  }, [isRunning]);
+
   // Listen to Electron IPC streams when in desktop app
   useEffect(() => {
     if (typeof window !== 'undefined' && window.aegisApi) {
@@ -319,6 +348,12 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
       if (typeof window !== 'undefined' && window.aegisApi) {
         await window.aegisApi.stopCapture();
       }
+      // Capture has now ended. Discard any packets that arrived while the stop
+      // IPC was in flight and gate the periodic flush off immediately so no
+      // stale buffered traffic is rendered after Stop. setIsRunning(false)
+      // mirrors this into the runningRef via the effect below.
+      packetBufferRef.current = [];
+      runningRef.current = false;
       setIsRunning(false);
     } else {
       if (!isElectron) {
@@ -331,6 +366,9 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
           setCaptureError(result.error || result.message || 'Failed to initialize native packet capture');
           setIsRunning(false);
         } else {
+          // Mark capturing synchronously so the flush gate never drops the
+          // first real packets arriving right after Start resolves.
+          runningRef.current = true;
           setIsRunning(true);
         }
       }
@@ -353,263 +391,67 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
     }
   };
 
-  const tabs = [
-    { id: 'pcap_monitor', label: 'Live Monitor', icon: Activity },
-    { id: 'pcap_analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'pcap_rules', label: 'Detection Engine', icon: Brain },
-    { id: 'explain', label: 'Explain Alert', icon: Search },
-    { id: 'logs', label: 'Traffic Logs', icon: List, badge: history.length > 0 ? history.length : undefined },
-    { id: 'soc_overview', label: 'SOC Command', icon: Shield },
-    { id: 'events', label: 'Telemetry Logs', icon: Radio, badge: siemEvents.length },
+  const openAlerts = socMetrics?.total_open_alerts ?? siemAlerts.filter((a) => a.status === 'OPEN').length;
+
+  // Navigation model — grouped, per FINAL_AEGIS_UI_BLUEPRINT.md §9.
+  const navGroups: NavGroup[] = [
     {
-      id: 'alerts',
-      label: 'Alerts & Triage',
-      icon: AlertTriangle,
-      badge: socMetrics?.total_open_alerts || siemAlerts.filter((a) => a.status === 'OPEN').length
+      label: 'Network protection',
+      items: [
+        { id: 'pcap_monitor', label: 'Live Monitor', icon: Activity },
+        { id: 'logs', label: 'Traffic Logs', icon: List },
+        { id: 'pcap_analytics', label: 'Analytics', icon: BarChart3 },
+        { id: 'pcap_rules', label: 'Detection Engine', icon: Brain }
+      ]
     },
     {
-      id: 'incidents',
-      label: 'Attack Chains',
-      icon: Layers,
-      badge: siemIncidents.length,
-      badgeColor: 'bg-[#ff3366]'
-    },
-    { id: 'devices', label: 'Endpoints', icon: Server, badge: socMetrics?.online_devices || monitoredDevices.length },
-    { id: 'rules', label: 'SIEM Rules', icon: FileCode, badge: detectionRules.length },
-    { id: 'reports', label: 'Audit Reports', icon: FileText }
+      label: 'SOC / endpoints',
+      items: [
+        { id: 'soc_overview', label: 'SOC Overview', icon: Shield },
+        { id: 'alerts', label: 'Alerts & Triage', icon: AlertTriangle, badge: openAlerts },
+        { id: 'incidents', label: 'Attack Chains', icon: Layers, badge: siemIncidents.length },
+        { id: 'events', label: 'Telemetry Events', icon: Radio },
+        { id: 'devices', label: 'Endpoints', icon: Server, badge: socMetrics?.online_devices ?? monitoredDevices.length },
+        { id: 'rules', label: 'SIEM Rules', icon: FileCode, badge: detectionRules.length },
+        { id: 'reports', label: 'Audit Reports', icon: FileText }
+      ]
+    }
   ];
 
-  return (
-    <div className="min-h-screen flex flex-col text-[#e0e6f0] bg-[#0a0e1a]">
-      {/* Top Navigation / Breadcrumb to Website */}
-      {showWebsiteNavReturn && (
-        <div className="bg-[#070b14] border-b border-[#1e293b] px-6 py-2 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 text-[#7090b0] hover:text-[#00d4ff] font-semibold transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Public Product Website</span>
-            </Link>
-            <span className="text-[#1e293b]">|</span>
-            <span className="text-[#00d4ff] font-mono text-[11px] font-bold">
-              OPERATIONAL ENVIRONMENT: {isElectron ? 'ELECTRON NATIVE (LOCAL IDS)' : 'SOC WEB CONSOLE PREVIEW'}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/documentation"
-              className="text-[#7090b0] hover:text-white transition-colors text-[11px]"
-            >
-              Docs &amp; Setup Guide
-            </Link>
-            <Link
-              href="/downloads"
-              className="px-2.5 py-1 bg-[#00d4ff]/10 hover:bg-[#00d4ff]/20 text-[#00d4ff] border border-[#00d4ff]/30 rounded text-[11px] font-bold transition-all flex items-center gap-1"
-            >
-              <Download className="w-3 h-3" />
-              Get Desktop Runner
-            </Link>
-          </div>
-        </div>
-      )}
+  const activeNavLabel = navGroups.flatMap((g) => g.items).find((i) => i.id === activeTab)?.label ?? 'Live Monitor';
 
-      {/* Top Header */}
-      <header className="bg-[#0d1220] border-b border-[#1e3a5f] px-6 py-4 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#00d4ff]/10 p-2 rounded-lg border border-[#00d4ff]/30">
-            <Shield className="w-6 h-6 text-[#00d4ff]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black neon-gradient-text tracking-tighter uppercase">
-                Aegis AI — Network IDS
-              </h1>
-              <span className="px-2 py-0.5 bg-[#00ff88]/10 border border-[#00ff88]/30 text-[#00ff88] text-[10px] font-bold rounded uppercase">
-                v2.0 Core
-              </span>
-            </div>
-            <p className="text-[10px] text-[#7090b0] font-bold uppercase tracking-widest">
-              High-Performance Stateful 5-Tuple Network Traffic Classifier &amp; Host Telemetry SIEM
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsSimulatorOpen(true)}
-            className="flex items-center gap-1.5 bg-[#00d4ff]/10 hover:bg-[#00d4ff]/20 text-[#00d4ff] border border-[#00d4ff]/40 px-3 py-1.5 rounded-md text-xs font-bold transition-all"
-          >
-            <Zap className="w-3.5 h-3.5" />
-            Attack Simulator
-          </button>
-
-          <button
-            onClick={() => refreshSiemData()}
-            disabled={isSiemLoading}
-            className="flex items-center gap-1.5 bg-[#1e3a5f]/60 hover:bg-[#1e3a5f] text-[#b0c4de] px-2.5 py-1.5 rounded-md text-xs font-bold transition-all disabled:opacity-50"
-            title="Refresh SIEM Telemetry"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSiemLoading ? 'animate-spin' : ''}`} />
-          </button>
-
-          <button
-            id="download-desktop-btn"
-            suppressHydrationWarning
-            onClick={() => setShowDownloadModal(true)}
-            className="hidden sm:flex items-center gap-2 bg-[#1e3a5f]/60 hover:bg-[#1e3a5f] text-white border border-[#1e3a5f] px-3 py-1.5 rounded-md text-xs font-bold transition-all"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Desktop Runner &amp; Agent
-          </button>
-
-          <div className="hidden md:flex flex-col items-end border-l border-[#1e3a5f] pl-4">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-[#00ff88] animate-pulse' : 'bg-[#7090b0]'}`} />
-              <span className={`text-xs font-bold uppercase tracking-widest ${isRunning ? 'text-[#00ff88]' : 'text-[#7090b0]'}`}>
-                {isRunning ? 'PCAP Capturing Active' : 'IDS Standby'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-[10px] text-[#7090b0] font-mono">
-              <Clock className="w-3 h-3" />
-              {currentTime ? currentTime.toLocaleTimeString() : '--:--:--'} UTC
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Tab Navigation */}
-      <div className="bg-[#0f172a] border-b border-[#1e3a5f] px-6">
-        <div className="flex max-w-7xl mx-auto overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tab-btn-${tab.id}`}
-                suppressHydrationWarning
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${
-                  isActive
-                    ? 'border-[#00d4ff] text-[#00d4ff] bg-[#00d4ff]/5'
-                    : 'border-transparent text-[#7090b0] hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-                {tab.badge !== undefined && tab.badge > 0 && (
-                  <span
-                    className={`ml-1 px-1.5 py-0.2 rounded text-[10px] font-black ${
-                      tab.badgeColor ? `${tab.badgeColor} text-white` : 'bg-[#1e3a5f] text-[#00d4ff]'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Container */}
-      <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
-        {/* 1. Network IDS: Live Monitor */}
-        {activeTab === 'pcap_monitor' && (
-          <div className="space-y-6">
-            <div className="p-4 bg-[#111827] border border-[#1e3a5f] rounded-xl flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold text-[#7090b0] uppercase">
-                  Network Interface
-                </span>
-                <select
-                  id="traffic-interface-select"
-                  suppressHydrationWarning
-                  value={selectedInterface}
-                  onChange={(e) => setSelectedInterface(e.target.value)}
-                  className="bg-[#0a0e1a] border border-[#1e3a5f] rounded-md px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#00d4ff]"
-                >
-                  {interfaces.length > 0 ? (
-                    interfaces.map((iface) => (
-                      <option key={iface.id} value={iface.id}>
-                        {iface.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="any">No Network Adapters Detected</option>
-                  )}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {!isRunning ? (
-                  <button
-                    id="start-monitoring-btn"
-                    suppressHydrationWarning
-                    onClick={handleToggleMonitoring}
-                    className="flex items-center gap-2 bg-[#00ff88] text-[#0a0e1a] px-4 py-1.5 rounded-md font-bold text-xs hover:bg-white transition-all glow-green"
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                    Start PCAP Capture
-                  </button>
-                ) : (
-                  <button
-                    id="stop-system-btn"
-                    suppressHydrationWarning
-                    onClick={handleToggleMonitoring}
-                    className="flex items-center gap-2 bg-[#ff3333] text-white px-4 py-1.5 rounded-md font-bold text-xs hover:bg-white hover:text-[#0a0e1a] transition-all glow-red"
-                  >
-                    <Square className="w-3 h-3 fill-current" />
-                    Stop PCAP Capture
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {captureError && (
-              <div className="p-4 bg-red-950/40 border border-red-500/50 rounded-xl text-red-300 text-xs font-mono flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                <div>
-                  <strong className="text-white">CAPTURE UNAVAILABLE: </strong>
-                  {captureError}
-                </div>
-              </div>
-            )}
-
-            <LiveMonitor
-              history={history}
-              anomalyScores={anomalyScores}
-              totalPackets={totalPackets}
-              attackCounts={attackCounts}
-              isRunning={isRunning}
-              latestSecurityAlert={latestSecurityAlert}
-            />
-          </div>
-        )}
-
-        {/* 2. Network IDS: Analytics */}
-        {activeTab === 'pcap_analytics' && (
-          <Analytics history={history} />
-        )}
-
-        {/* 3. Network IDS: Detection Engine & Model Performance */}
-        {activeTab === 'pcap_rules' && (
-          <ModelPerformance />
-        )}
-
-        {/* 4. Network IDS: Explain Alert Vector */}
-        {activeTab === 'explain' && (
-          <ExplainAlert />
-        )}
-
-        {/* 5. Network IDS: Traffic Inspection Logs */}
-        {activeTab === 'logs' && (
-          <LogsPanel history={history} />
-        )}
-
-        {/* 6. SIEM: SOC Overview */}
-        {activeTab === 'soc_overview' && (
+  const renderView = () => {
+    switch (activeTab) {
+      case 'pcap_monitor':
+        return (
+          <LiveMonitor
+            history={history}
+            anomalyScores={anomalyScores}
+            totalPackets={totalPackets}
+            attackCounts={attackCounts}
+            isRunning={isRunning}
+            latestSecurityAlert={latestSecurityAlert}
+            interfaces={interfaces}
+            selectedInterface={selectedInterface}
+            onInterfaceChange={setSelectedInterface}
+            isElectron={isElectron}
+            onToggleMonitoring={handleToggleMonitoring}
+            captureError={captureError}
+            onOpenDownloadModal={() => setShowDownloadModal(true)}
+            onOpenLogs={() => setActiveTab('logs')}
+            engineStatus={engineStatus}
+          />
+        );
+      case 'pcap_analytics':
+        return <Analytics history={history} />;
+      case 'pcap_rules':
+        return <DetectionEngineView activeTab={activeTab} setActiveTab={setActiveTab} />;
+      case 'explain':
+        return <ExplainAlert />;
+      case 'logs':
+        return <LogsPanel history={history} />;
+      case 'soc_overview':
+        return (
           <SocOverview
             metrics={socMetrics}
             incidents={siemIncidents}
@@ -618,52 +460,176 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
             onNavigateTab={(t) => setActiveTab(t as TabType)}
             onOpenSimulator={() => setIsSimulatorOpen(true)}
           />
-        )}
-
-        {/* 7. SIEM: Live Telemetry Events */}
-        {activeTab === 'events' && (
+        );
+      case 'events':
+        return (
           <LiveEventsView
             events={siemEvents}
             isLoading={isSiemLoading}
             onRefresh={refreshSiemData}
           />
-        )}
-
-        {/* 8. SIEM: Security Alerts Investigation */}
-        {activeTab === 'alerts' && (
+        );
+      case 'alerts':
+        return (
           <AlertsInvestigationView
             alerts={siemAlerts}
             onUpdateStatus={handleUpdateAlertStatus}
             onRefresh={refreshSiemData}
           />
-        )}
+        );
+      case 'incidents':
+        return <IncidentsView incidents={siemIncidents} onRefresh={refreshSiemData} />;
+      case 'devices':
+        return <DevicesView devices={monitoredDevices} onRefresh={refreshSiemData} />;
+      case 'rules':
+        return <DetectionRulesView rules={detectionRules} />;
+      case 'reports':
+        return <ReportsView />;
+      default:
+        return null;
+    }
+  };
 
-        {/* 9. SIEM: Correlated Incidents */}
-        {activeTab === 'incidents' && (
-          <IncidentsView
-            incidents={siemIncidents}
-            onRefresh={refreshSiemData}
-          />
-        )}
+  return (
+    <div className="h-screen flex flex-col bg-canvas text-primary overflow-hidden">
+      {/* Slim return strip — web preview only. Never rendered inside the Electron app. */}
+      {showWebsiteNavReturn && !isElectron && (
+        <div className="shrink-0 bg-canvas-deep border-b border-hairline px-4 py-1.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 text-caption text-muted hover:text-primary transition-colors whitespace-nowrap"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to public product website
+            </Link>
+            <span className="text-micro text-faint">|</span>
+            <Chip tone="neutral" className="font-normal">Web preview — full packet capture requires the desktop app</Chip>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/documentation"
+              className="text-caption text-muted hover:text-primary transition-colors whitespace-nowrap"
+            >
+              Documentation
+            </Link>
+            <Link
+              href="/downloads"
+              className="text-caption text-accent hover:text-accent-hover font-medium transition-colors whitespace-nowrap"
+            >
+              Get desktop runner
+            </Link>
+          </div>
+        </div>
+      )}
 
-        {/* 10. SIEM: Monitored Endpoints */}
-        {activeTab === 'devices' && (
-          <DevicesView
-            devices={monitoredDevices}
-            onRefresh={refreshSiemData}
-          />
-        )}
+      <div className="flex flex-1 min-h-0">
+        {/* ───────────────── Sidebar ───────────────── */}
+        <aside className="w-[232px] shrink-0 bg-surface-1 border-r border-hairline flex flex-col min-h-0">
+          <div className="h-14 shrink-0 flex items-center gap-2.5 px-4 border-b border-hairline">
+            <div className="flex items-center justify-center w-7 h-7 rounded-control bg-accent/15 text-accent">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div className="leading-tight min-w-0">
+              <div className="text-subtitle font-semibold tracking-tight text-primary truncate">Aegis</div>
+              <div className="text-micro text-muted truncate">Network IDS console</div>
+            </div>
+          </div>
 
-        {/* 11. SIEM: Detection Rules Repository */}
-        {activeTab === 'rules' && (
-          <DetectionRulesView rules={detectionRules} />
-        )}
+          <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
+            {navGroups.map((group) => (
+              <div key={group.label}>
+                <div className="px-2 pb-1.5 text-micro text-faint">{group.label}</div>
+                <div className="space-y-0.5">
+                  {group.items.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        id={`tab-btn-${tab.id}`}
+                        suppressHydrationWarning
+                        onClick={() => setActiveTab(tab.id as TabType)}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 rounded-control px-2.5 h-8 text-caption font-medium transition-colors',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+                          isActive
+                            ? 'bg-accent-soft text-accent'
+                            : 'text-muted hover:text-primary hover:bg-surface-2'
+                        )}
+                      >
+                        <tab.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-accent' : 'text-muted')} />
+                        <span className="flex-1 text-left truncate">{tab.label}</span>
+                        {tab.badge !== undefined && tab.badge > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-well bg-surface-3 text-micro text-secondary font-medium tabular-nums shrink-0">
+                            {tab.badge > 999 ? '999+' : tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
 
-        {/* 12. SIEM: Reports & Compliance */}
-        {activeTab === 'reports' && (
-          <ReportsView />
-        )}
-      </main>
+          <div className="shrink-0 px-4 py-3 border-t border-hairline space-y-1">
+            <div className="flex items-center gap-1.5 text-micro text-muted">
+              <Chip tone="neutral" className="gap-1.5 !py-0.5 !px-2 text-micro">
+                {isElectron ? 'Native capture' : 'Web preview'}
+              </Chip>
+            </div>
+            <div className="text-micro text-faint">Aegis AI — Network IDS v2.0</div>
+          </div>
+        </aside>
+
+        {/* ───────────────── Main column ───────────────── */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top app bar */}
+          <header className="shrink-0 h-14 bg-surface-1/95 border-b border-hairline flex items-center justify-between gap-4 px-5">
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="text-subtitle font-semibold text-primary tracking-tight truncate">{activeNavLabel}</h1>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="hidden md:flex items-center gap-2.5 mr-1">
+                <Chip tone={isRunning ? 'success' : 'neutral'} dot className="font-medium">
+                  {isRunning ? 'PCAP capturing' : 'IDS standby'}
+                </Chip>
+                <div className="flex items-center gap-1 text-micro text-muted tabular-nums font-mono">
+                  <Clock className="w-3.5 h-3.5" />
+                  {currentTime ? currentTime.toLocaleTimeString() : '--:--:--'} UTC
+                </div>
+              </div>
+
+              <Button
+                id="download-desktop-btn"
+                suppressHydrationWarning
+                variant="tertiary"
+                className="hidden lg:inline-flex text-caption"
+                onClick={() => setShowDownloadModal(true)}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Desktop runner
+              </Button>
+
+              <IconButton label={isSiemLoading ? 'Refreshing telemetry' : 'Refresh telemetry data'} onClick={() => refreshSiemData()} disabled={isSiemLoading}>
+                <RefreshCw className={cn('w-4 h-4', isSiemLoading && 'animate-spin')} />
+              </IconButton>
+
+              <Button variant="secondary" size="sm" onClick={() => setIsSimulatorOpen(true)} title="Run simulated security scenarios">
+                <FlaskConical className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Attack Simulator</span>
+              </Button>
+            </div>
+          </header>
+
+          {/* Content */}
+          <main className="flex-1 overflow-y-auto">
+            <div className="p-6">{renderView()}</div>
+          </main>
+        </div>
+      </div>
 
       {/* Attack Simulator Modal */}
       <AttackSimulatorModal
@@ -674,148 +640,116 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
 
       {/* Download Desktop App Modal */}
       {showDownloadModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d1220] border border-[#1e3a5f] rounded-xl max-w-2xl w-full p-6 space-y-6 shadow-2xl relative">
-            <button
-              onClick={() => setShowDownloadModal(false)}
-              className="text-[#7090b0] hover:text-white transition-colors absolute top-4 right-4"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <Dialog
+          onClose={() => setShowDownloadModal(false)}
+          eyebrow="Desktop & endpoint agent"
+          title="Run capture natively"
+          footer={
+            <Button variant="secondary" onClick={() => setShowDownloadModal(false)}>
+              Close
+            </Button>
+          }
+        >
+          <div className="space-y-5">
+            <p className="text-body text-secondary leading-relaxed">
+              Real promiscuous packet capture and the local endpoint agent run inside the native desktop app.
+            </p>
 
-            <div className="flex items-center gap-3">
-              <div className="bg-[#00d4ff]/10 p-3 rounded-lg border border-[#00d4ff]/30">
-                <Laptop className="w-6 h-6 text-[#00d4ff]" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white uppercase tracking-tight">
-                  Desktop IDS &amp; Endpoint Agent
-                </h3>
-                <p className="text-xs text-[#7090b0]">
-                  Connect external Linux/Windows endpoints or run real-time promiscuous PCAP capture natively.
-                </p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { label: 'Windows', meta: '.exe installer', url: windowsDownloadUrl },
+                { label: 'macOS', meta: '.dmg universal', url: macosDownloadUrl },
+                { label: 'Linux', meta: 'Agent / AppImage', url: linuxDownloadUrl }
+              ].map((os) => (
+                <div key={os.label} className="flex flex-col items-center gap-2 p-4 rounded-card border border-hairline bg-surface-1 text-center">
+                  <div className="w-9 h-9 rounded-control bg-surface-2 text-muted flex items-center justify-center">
+                    <Laptop className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-caption font-semibold text-primary">{os.label}</div>
+                    <div className="text-micro text-muted">{os.meta}</div>
+                  </div>
+                  {os.url ? (
+                    <a
+                      href={os.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-1 h-7 px-3 rounded-control bg-accent text-white text-caption font-medium hover:bg-accent-hover transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+                  ) : (
+                    <span className="mt-1 px-3 py-1.5 rounded-control bg-surface-2 border border-hairline text-micro text-faint">
+                      Available in repo
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Windows Card */}
-              <div className="flex flex-col items-center justify-between p-4 bg-[#111827] border border-[#1e3a5f] rounded-lg text-center">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-[#00d4ff]/10 flex items-center justify-center text-[#00d4ff] mb-2">
-                    <Laptop className="w-5 h-5" />
-                  </div>
-                  <span className="font-bold text-sm text-white">Windows</span>
-                  <span className="text-[10px] text-[#7090b0] mb-3">.exe Installer</span>
-                </div>
-                {windowsDownloadUrl ? (
-                  <a
-                    href={windowsDownloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-[#00d4ff] hover:bg-white text-[#0a0e1a] rounded text-xs font-bold transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download Windows
-                  </a>
-                ) : (
-                  <div className="w-full py-1.5 px-3 bg-[#1e3a5f]/40 border border-[#1e3a5f] text-[#7090b0] rounded text-xs font-semibold uppercase tracking-wider">
-                    Available in Repo
-                  </div>
-                )}
+            <div className="rounded-card border border-hairline bg-surface-1 p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-caption font-semibold text-primary">
+                <Terminal className="w-4 h-4 text-muted" />
+                Running the local endpoint agent
               </div>
-
-              {/* macOS Card */}
-              <div className="flex flex-col items-center justify-between p-4 bg-[#111827] border border-[#1e3a5f] rounded-lg text-center">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-[#00d4ff]/10 flex items-center justify-center text-[#00d4ff] mb-2">
-                    <Laptop className="w-5 h-5" />
-                  </div>
-                  <span className="font-bold text-sm text-white">macOS</span>
-                  <span className="text-[10px] text-[#7090b0] mb-3">.dmg Universal</span>
-                </div>
-                {macosDownloadUrl ? (
-                  <a
-                    href={macosDownloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-[#00d4ff] hover:bg-white text-[#0a0e1a] rounded text-xs font-bold transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download macOS
-                  </a>
-                ) : (
-                  <div className="w-full py-1.5 px-3 bg-[#1e3a5f]/40 border border-[#1e3a5f] text-[#7090b0] rounded text-xs font-semibold uppercase tracking-wider">
-                    Available in Repo
-                  </div>
-                )}
-              </div>
-
-              {/* Linux Card */}
-              <div className="flex flex-col items-center justify-between p-4 bg-[#111827] border border-[#1e3a5f] rounded-lg text-center">
-                <div className="flex flex-col items-center">
-                  <div className="w-10 h-10 rounded-full bg-[#00d4ff]/10 flex items-center justify-center text-[#00d4ff] mb-2">
-                    <Laptop className="w-5 h-5" />
-                  </div>
-                  <span className="font-bold text-sm text-white">Linux</span>
-                  <span className="text-[10px] text-[#7090b0] mb-3">Agent / AppImage</span>
-                </div>
-                {linuxDownloadUrl ? (
-                  <a
-                    href={linuxDownloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-[#00d4ff] hover:bg-white text-[#0a0e1a] rounded text-xs font-bold transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download Linux
-                  </a>
-                ) : (
-                  <div className="w-full py-1.5 px-3 bg-[#1e3a5f]/40 border border-[#1e3a5f] text-[#7090b0] rounded text-xs font-semibold uppercase tracking-wider">
-                    Available in Repo
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-[#111827] p-4 rounded-lg border border-[#1e3a5f] space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-white uppercase">
-                <Terminal className="w-4 h-4 text-[#00ff88]" />
-                Running the Local Endpoint Agent
-              </div>
-              <p className="text-xs text-[#b0c4de]">
-                To stream genuine local auth/syslog telemetry directly to this SIEM, run:
+              <p className="text-caption text-secondary leading-relaxed">
+                Stream genuine local auth / syslog telemetry to this console:
               </p>
-              <pre className="p-2.5 bg-[#0a0e1a] rounded border border-[#1e3a5f] font-mono text-xs text-[#00ff88]">
+              <pre className="px-3 py-2.5 rounded-well bg-canvas-deep border border-hairline font-mono text-micro text-success overflow-x-auto">
                 python3 agent/agent.py --server http://localhost:3000 --interval 2
               </pre>
             </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowDownloadModal(false)}
-                className="px-4 py-2 bg-[#1e3a5f] hover:bg-[#1e3a5f]/80 text-white rounded-md text-xs font-bold"
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </div>
+        </Dialog>
       )}
+    </div>
+  );
+}
 
-      {/* Footer */}
-      <footer className="bg-[#0d1220] border-t border-[#1e3a5f] px-6 py-3 flex items-center justify-between text-[10px] text-[#7090b0] font-bold uppercase tracking-widest">
-        <div>© 2026 Aegis Cyber-Defense Systems. Real-Time Network Intrusion Detection.</div>
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
-            5-Tuple Packet Classifier: Active
-          </span>
-          <span className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
-            SQLite WAL Database: Online
-          </span>
-        </div>
-      </footer>
+/* ------------------------------------------------------------------ */
+/* Detection Engine — one nav item, two internal segments              */
+/* ------------------------------------------------------------------ */
+
+function DetectionEngineView({
+  activeTab,
+  setActiveTab
+}: {
+  activeTab: TabType;
+  setActiveTab: (t: TabType) => void;
+}) {
+  const segment: 'overview' | 'explain' = activeTab === 'explain' ? 'explain' : 'overview';
+  return (
+    <div className="space-y-5">
+      <div className="inline-flex items-center gap-1 p-1 rounded-control bg-surface-2 border border-hairline">
+        <button
+          id="tab-btn-pcap_rules"
+          suppressHydrationWarning
+          onClick={() => setActiveTab('pcap_rules')}
+          className={cn(
+            'h-7 px-3 rounded-[6px] text-caption font-medium transition-colors focus-visible:outline-none',
+            segment === 'overview'
+              ? 'bg-surface-3 text-primary shadow-none'
+              : 'text-muted hover:text-primary'
+          )}
+        >
+          Engine overview
+        </button>
+        <button
+          id="tab-btn-explain"
+          suppressHydrationWarning
+          onClick={() => setActiveTab('explain')}
+          className={cn(
+            'h-7 px-3 rounded-[6px] text-caption font-medium transition-colors focus-visible:outline-none',
+            segment === 'explain'
+              ? 'bg-surface-3 text-primary'
+              : 'text-muted hover:text-primary'
+          )}
+        >
+          Explain a detection
+        </button>
+      </div>
+      {segment === 'overview' ? <ModelPerformance /> : <ExplainAlert />}
     </div>
   );
 }

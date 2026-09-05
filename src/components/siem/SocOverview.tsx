@@ -6,16 +6,23 @@ import {
   Server,
   Activity,
   AlertTriangle,
-  Radio,
-  Clock,
-  ArrowUpRight,
-  TrendingUp,
-  Cpu,
   Layers,
-  Terminal,
-  Zap
+  Radio,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { SOCMetrics, CorrelatedIncident, SecurityAlert } from '@/types';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Chip,
+  cn,
+  EmptyState,
+  MetricCard,
+  SeverityChip,
+  StatusDot
+} from '../ui';
 
 interface SocOverviewProps {
   metrics: SOCMetrics | null;
@@ -47,346 +54,232 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
     LOW: 0
   };
 
+  const topIncident = incidents.length > 0 ? incidents[0] : null;
+
   return (
-    <div className="space-y-6">
-      {/* Top Banner Alert if Critical Incidents exist */}
-      {incidents.length > 0 && (
-        <div className="p-4 bg-[#ff3366]/10 border border-[#ff3366]/40 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-pulse">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#ff3366]/20 rounded-lg text-[#ff3366]">
-              <ShieldAlert className="w-6 h-6" />
+    <div className="space-y-5">
+      {/* Critical incident attention banner — calm, no pulse */}
+      {topIncident && (
+        <Card className="p-4 border-l-2 border-l-critical flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex items-center justify-center w-9 h-9 rounded-control bg-critical-soft text-critical shrink-0">
+              <ShieldAlert className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-[#ff3366] text-[#0a0e1a] text-[10px] font-black uppercase rounded tracking-wider">
-                  Critical Multi-Stage Incident
-                </span>
-                <span className="text-xs font-bold text-[#ff3366]">
-                  {incidents[0].title}
-                </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <SeverityChip severity={topIncident.severity} />
+                <span className="text-caption font-semibold text-primary truncate">{topIncident.title}</span>
               </div>
-              <p className="text-xs text-[#b0c4de] mt-0.5">
-                {incidents[0].summary}
-              </p>
+              <p className="text-caption text-secondary leading-relaxed mt-0.5">{topIncident.summary}</p>
             </div>
           </div>
-          <button
+          <Button
+            variant="dangerOutline"
+            className="shrink-0 self-start md:self-center"
             onClick={() => onNavigateTab('incidents')}
-            className="px-3.5 py-1.5 bg-[#ff3366] hover:bg-white text-[#0a0e1a] text-xs font-bold rounded-lg transition-all flex items-center gap-1 shrink-0"
           >
-            Investigate Incident
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+            Investigate incident
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        </Card>
       )}
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Ingested Events */}
-        <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#7090b0] uppercase tracking-wider">
-              Ingested Telemetry
+      {/* KPI row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <MetricCard
+          label="Ingested telemetry"
+          value={totalEvents.toLocaleString()}
+          icon={Activity}
+          context={
+            <span className="inline-flex items-center gap-1.5 text-caption text-success">
+              <StatusDot tone="success" />
+              Live
             </span>
-            <div className="p-1.5 bg-[#00d4ff]/10 text-[#00d4ff] rounded-lg">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white">
-              {totalEvents.toLocaleString()}
+          }
+        />
+        <MetricCard
+          label="Monitored endpoints"
+          value={`${onlineDevices} / ${totalDevices}`}
+          icon={Server}
+          context={
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone={onlineDevices > 0 ? 'success' : 'neutral'} />
+              <span className="text-caption text-muted">Heartbeat {onlineDevices > 0 ? 'healthy' : 'waiting'}</span>
             </span>
-            <span className="text-[10px] text-[#00ff88] font-bold flex items-center">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> Live
-            </span>
-          </div>
-          <p className="text-[11px] text-[#7090b0] mt-1">Normalized endpoint events</p>
-        </div>
-
-        {/* Monitored Endpoints */}
-        <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#7090b0] uppercase tracking-wider">
-              Monitored Endpoints
-            </span>
-            <div className="p-1.5 bg-[#00ff88]/10 text-[#00ff88] rounded-lg">
-              <Server className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white">
-              {onlineDevices}
-            </span>
-            <span className="text-xs text-[#7090b0] font-semibold">
-              / {totalDevices} Registered
-            </span>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-[#00ff88] animate-ping" />
-            <span className="text-[#00ff88] font-medium">Heartbeat healthy</span>
-          </div>
-        </div>
-
-        {/* Open Security Alerts */}
-        <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#7090b0] uppercase tracking-wider">
-              Active Alerts
-            </span>
-            <div className="p-1.5 bg-[#ffaa00]/10 text-[#ffaa00] rounded-lg">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-[#ffaa00]">
-              {openAlerts}
-            </span>
-            <span className="text-xs text-[#7090b0] font-semibold">Open</span>
-          </div>
-          <p className="text-[11px] text-[#7090b0] mt-1">
-            Requiring analyst triage
-          </p>
-        </div>
-
-        {/* Critical Threat Tally */}
-        <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#7090b0] uppercase tracking-wider">
-              Critical Severity
-            </span>
-            <div className="p-1.5 bg-[#ff3366]/10 text-[#ff3366] rounded-lg">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-[#ff3366]">
-              {criticalAlerts}
-            </span>
-            <span className="text-xs text-[#ff3366] font-semibold">Urgent</span>
-          </div>
-          <p className="text-[11px] text-[#7090b0] mt-1">
-            High-risk security detections
-          </p>
-        </div>
+          }
+        />
+        <MetricCard
+          label="Active alerts"
+          value={openAlerts}
+          icon={AlertTriangle}
+          context={
+            openAlerts > 0 ? (
+              <span className="text-caption text-muted">Requiring analyst triage</span>
+            ) : (
+              <span className="text-caption text-success">No open alerts</span>
+            )
+          }
+        />
+        <MetricCard
+          label="Critical severity"
+          value={criticalAlerts}
+          icon={ShieldAlert}
+          context={
+            criticalAlerts > 0 ? (
+              <span className="inline-flex items-center gap-1.5">
+                <StatusDot tone="critical" />
+                <span className="text-caption text-muted">High-risk detections</span>
+              </span>
+            ) : (
+              <span className="text-caption text-success">No critical alerts</span>
+            )
+          }
+        />
       </div>
 
-      {/* Main SOC Dashboard 2-Column Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Severity Breakdown & Top Target Hosts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Threat Distribution Card */}
-          <div className="bg-[#111827] border border-[#1e3a5f] p-5 rounded-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-[#00d4ff]" />
-                  Threat Severity Distribution
-                </h3>
-                <p className="text-xs text-[#7090b0] mt-0.5">
-                  Breakdown of generated security alerts by risk tier
-                </p>
-              </div>
-              <button
-                onClick={onOpenSimulator}
-                className="px-3 py-1.5 bg-[#00d4ff]/10 hover:bg-[#00d4ff]/20 text-[#00d4ff] border border-[#00d4ff]/30 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5"
-              >
-                <Zap className="w-3.5 h-3.5 text-[#00d4ff]" />
-                Simulate Scenario
-              </button>
-            </div>
-
+      {/* Main 2-col section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Threat distribution */}
+          <Card className="p-5">
+            <CardHeader
+              title="Threat severity distribution"
+              description="Open security alerts by risk tier"
+              icon={Layers}
+              actions={
+                <Button variant="secondary" size="sm" onClick={onOpenSimulator}>
+                  <Zap className="w-3.5 h-3.5" />
+                  Simulate scenario
+                </Button>
+              }
+            />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 bg-[#ff3366]/10 border border-[#ff3366]/30 rounded-lg text-center">
-                <span className="text-[10px] uppercase font-bold text-[#ff3366]">
-                  Critical
-                </span>
-                <div className="text-2xl font-black text-white mt-1">
-                  {sevDist.CRITICAL || 0}
+              {[
+                { key: 'CRITICAL', count: sevDist.CRITICAL || 0, note: 'Risk ≥ 90' },
+                { key: 'HIGH', count: sevDist.HIGH || 0, note: 'Risk 70–89' },
+                { key: 'MEDIUM', count: sevDist.MEDIUM || 0, note: 'Risk 40–69' },
+                { key: 'LOW', count: sevDist.LOW || 0, note: 'Risk 0–39' }
+              ].map((tier) => (
+                <div key={tier.key} className="p-3 rounded-card bg-canvas-deep border border-hairline text-center">
+                  <div className="flex justify-center">
+                    <SeverityChip severity={tier.key} />
+                  </div>
+                  <div className="text-title font-semibold text-primary tabular-nums mt-2">{tier.count}</div>
+                  <div className="text-micro text-muted mt-0.5">{tier.note}</div>
                 </div>
-                <div className="text-[10px] text-[#7090b0] mt-0.5">Risk &ge; 90</div>
-              </div>
-              <div className="p-3 bg-[#ffaa00]/10 border border-[#ffaa00]/30 rounded-lg text-center">
-                <span className="text-[10px] uppercase font-bold text-[#ffaa00]">
-                  High
-                </span>
-                <div className="text-2xl font-black text-white mt-1">
-                  {sevDist.HIGH || 0}
-                </div>
-                <div className="text-[10px] text-[#7090b0] mt-0.5">Risk 70-89</div>
-              </div>
-              <div className="p-3 bg-[#00d4ff]/10 border border-[#00d4ff]/30 rounded-lg text-center">
-                <span className="text-[10px] uppercase font-bold text-[#00d4ff]">
-                  Medium
-                </span>
-                <div className="text-2xl font-black text-white mt-1">
-                  {sevDist.MEDIUM || 0}
-                </div>
-                <div className="text-[10px] text-[#7090b0] mt-0.5">Risk 40-69</div>
-              </div>
-              <div className="p-3 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg text-center">
-                <span className="text-[10px] uppercase font-bold text-[#00ff88]">
-                  Low / Info
-                </span>
-                <div className="text-2xl font-black text-white mt-1">
-                  {sevDist.LOW || 0}
-                </div>
-                <div className="text-[10px] text-[#7090b0] mt-0.5">Risk 0-39</div>
-              </div>
+              ))}
             </div>
 
-            {/* Event Taxonomy Bar */}
-            <div className="mt-5 pt-4 border-t border-[#1e3a5f]/60">
-              <span className="text-[11px] font-bold text-[#7090b0] uppercase tracking-wider block mb-2">
-                Ingested Event Taxonomy Breakdown
-              </span>
+            {/* Taxonomy */}
+            <div className="mt-5 pt-4 border-t border-hairline">
+              <div className="text-caption text-muted mb-2">Ingested event taxonomy</div>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(metrics?.event_type_distribution || {}).map(([type, count]) => (
-                  <div
-                    key={type}
-                    className="px-2.5 py-1 bg-[#1e3a5f]/40 border border-[#1e3a5f] rounded text-xs text-[#b0c4de] flex items-center gap-1.5"
-                  >
-                    <span className="capitalize font-semibold text-white">{type}:</span>
-                    <span className="text-[#00d4ff] font-bold">{count}</span>
-                  </div>
+                  <Chip key={type} tone="neutral" className="font-normal">
+                    <span className="capitalize">{type}</span>
+                    <span className="text-secondary tabular-nums font-medium">{count}</span>
+                  </Chip>
                 ))}
                 {(!metrics?.event_type_distribution || Object.keys(metrics.event_type_distribution).length === 0) && (
-                  <span className="text-xs text-[#7090b0] italic">
-                    Awaiting endpoint telemetry streams...
-                  </span>
+                  <span className="text-caption text-muted italic">Awaiting endpoint telemetry streams…</span>
                 )}
               </div>
             </div>
-          </div>
+          </Card>
 
-          {/* Top Threat Sources & Monitored Assets */}
+          {/* Top sources / hosts */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Top Source IPs */}
-            <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5 text-[#ffaa00]" />
-                Top Originating Threat IPs
-              </h4>
+            <Card className="p-4">
+              <CardHeader title="Top originating threat IPs" icon={Radio} className="mb-3" />
               <div className="space-y-2">
                 {(metrics?.top_source_ips || []).map((ip, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-2 bg-[#0a0e1a] border border-[#1e3a5f]/50 rounded-lg text-xs"
-                  >
-                    <span className="font-mono text-[#00d4ff] font-semibold">
-                      {ip.ip}
-                    </span>
-                    <span className="px-2 py-0.5 bg-[#1e3a5f] text-white font-bold rounded text-[11px]">
+                  <div key={idx} className="flex items-center justify-between gap-3 p-2 rounded-well bg-canvas-deep border border-hairline">
+                    <span className="font-mono text-caption text-primary truncate">{ip.ip}</span>
+                    <Chip tone="neutral" className="!py-[2px] text-micro">
                       {ip.count} events
-                    </span>
+                    </Chip>
                   </div>
                 ))}
                 {(!metrics?.top_source_ips || metrics.top_source_ips.length === 0) && (
-                  <p className="text-xs text-[#7090b0] italic py-2">
-                    No malicious external IPs logged yet.
-                  </p>
+                  <p className="text-caption text-muted italic py-2">No malicious external IPs logged yet.</p>
                 )}
               </div>
-            </div>
-
-            {/* Top Affected Hosts */}
-            <div className="bg-[#111827] border border-[#1e3a5f] p-4 rounded-xl">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Server className="w-3.5 h-3.5 text-[#00ff88]" />
-                Top Monitored Host Activity
-              </h4>
+            </Card>
+            <Card className="p-4">
+              <CardHeader title="Top monitored host activity" icon={Server} className="mb-3" />
               <div className="space-y-2">
                 {(metrics?.top_affected_hosts || []).map((h, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-2 bg-[#0a0e1a] border border-[#1e3a5f]/50 rounded-lg text-xs"
-                  >
-                    <span className="font-mono text-white font-medium">
-                      {h.hostname}
-                    </span>
-                    <span className="px-2 py-0.5 bg-[#00d4ff]/10 text-[#00d4ff] border border-[#00d4ff]/30 font-bold rounded text-[11px]">
+                  <div key={idx} className="flex items-center justify-between gap-3 p-2 rounded-well bg-canvas-deep border border-hairline">
+                    <span className="text-caption text-primary truncate">{h.hostname}</span>
+                    <Chip tone="neutral" className="!py-[2px] text-micro">
                       {h.count} events
-                    </span>
+                    </Chip>
                   </div>
                 ))}
                 {(!metrics?.top_affected_hosts || metrics.top_affected_hosts.length === 0) && (
-                  <p className="text-xs text-[#7090b0] italic py-2">
-                    No endpoint telemetry logged yet.
-                  </p>
+                  <p className="text-caption text-muted italic py-2">No endpoint telemetry logged yet.</p>
                 )}
               </div>
-            </div>
+            </Card>
           </div>
         </div>
 
-        {/* Right Col: Recent Alerts Feed */}
-        <div className="bg-[#111827] border border-[#1e3a5f] p-5 rounded-xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-[#ffaa00]" />
-                Recent Security Alerts
-              </h3>
+        {/* Right: Recent alerts */}
+        <Card className="p-5">
+          <CardHeader
+            title="Recent security alerts"
+            icon={AlertTriangle}
+            actions={
+              <Button variant="tertiary" size="sm" onClick={() => onNavigateTab('alerts')}>
+                View all
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            }
+            className="mb-3"
+          />
+          <div className="space-y-2">
+            {recentAlerts.slice(0, 5).map((alert) => (
               <button
-                onClick={() => onNavigateTab('alerts')}
-                className="text-xs font-bold text-[#00d4ff] hover:underline"
+                key={alert.alert_id}
+                onClick={() => onSelectAlert(alert)}
+                className={cn(
+                  'w-full text-left p-3 rounded-card bg-canvas-deep border border-hairline',
+                  'hover:border-hairline-strong hover:bg-surface-2 transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60'
+                )}
               >
-                View All &rarr;
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {recentAlerts.slice(0, 5).map((alert) => {
-                const isCrit = alert.severity === 'CRITICAL';
-                const isHigh = alert.severity === 'HIGH';
-                const badgeBg = isCrit
-                  ? 'bg-[#ff3366] text-[#0a0e1a]'
-                  : isHigh
-                  ? 'bg-[#ffaa00] text-[#0a0e1a]'
-                  : 'bg-[#00d4ff] text-[#0a0e1a]';
-
-                return (
-                  <div
-                    key={alert.alert_id}
-                    onClick={() => onSelectAlert(alert)}
-                    className="p-3 bg-[#0a0e1a] border border-[#1e3a5f] hover:border-[#00d4ff] rounded-lg cursor-pointer transition-all space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeBg}`}>
-                        {alert.severity} ({alert.risk_score})
-                      </span>
-                      <span className="text-[10px] text-[#7090b0] font-mono">
-                        {alert.last_seen.substring(11, 19)} UTC
-                      </span>
-                    </div>
-                    <h5 className="text-xs font-bold text-white line-clamp-1">
-                      {alert.title}
-                    </h5>
-                    <div className="flex items-center justify-between text-[11px] text-[#7090b0]">
-                      <span>Host: <code className="text-[#00d4ff]">{alert.hostname}</code></span>
-                      <span>Count: <strong className="text-white">{alert.event_count}</strong></span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {recentAlerts.length === 0 && (
-                <div className="py-8 text-center text-xs text-[#7090b0]">
-                  No active alerts. System telemetry is within normal security thresholds.
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <SeverityChip severity={alert.severity} />
+                  <span className="text-micro font-mono text-muted tabular-nums">
+                    {alert.last_seen.substring(11, 19)} UTC
+                  </span>
                 </div>
-              )}
-            </div>
+                <h5 className="text-caption font-medium text-primary leading-snug line-clamp-2">{alert.title}</h5>
+                <div className="flex items-center justify-between gap-2 text-micro text-muted mt-1.5">
+                  <span className="truncate">Host: {alert.hostname}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {alert.event_count} events
+                  </span>
+                </div>
+              </button>
+            ))}
+            {recentAlerts.length === 0 && (
+              <EmptyState
+                title="No active alerts"
+                description="System telemetry is within normal security thresholds."
+                className="py-10"
+              />
+            )}
           </div>
 
-          <div className="mt-4 pt-4 border-t border-[#1e3a5f]">
-            <div className="flex items-center justify-between text-xs text-[#7090b0]">
-              <span>Engine Status:</span>
-              <span className="text-[#00ff88] font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88]" />
-                Real-Time Stateful IDS Active
-              </span>
-            </div>
+          <div className="mt-4 pt-3 border-t border-hairline flex items-center justify-between gap-2">
+            <span className="text-caption text-muted">Engine status</span>
+            <span className="inline-flex items-center gap-1.5 text-caption text-success">
+              <StatusDot tone="success" />
+              Real-time stateful IDS active
+            </span>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

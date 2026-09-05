@@ -6,7 +6,8 @@
  */
 
 import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { chartColors, tooltipStyle } from './ui';
 
 interface AnomalyChartProps {
   scores: number[];
@@ -14,50 +15,54 @@ interface AnomalyChartProps {
 
 export const AnomalyChart: React.FC<AnomalyChartProps> = ({ scores }) => {
   const data = scores.map((score, index) => ({ index, score }));
+  const isEmpty = scores.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="h-[140px] w-full flex items-center justify-center text-caption text-faint">
+        Scores will appear here while capture is running.
+      </div>
+    );
+  }
 
   return (
-    <div className="h-[200px] w-full">
+    <div className="h-[140px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-          <defs>
-            <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="#00d4ff" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" vertical={false} />
-          <XAxis 
-            dataKey="index" 
-            hide 
+        <AreaChart data={data} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
+          {/* Region below the threshold = deviation from baseline (engine: iso_score < 0). */}
+          <ReferenceArea y1={-1} y2={0} fill="rgba(229,72,77,0.05)" stroke="none" ifOverflow="extendDomain" />
+          <ReferenceLine
+            y={0}
+            stroke={chartColors.grid}
+            strokeDasharray="3 3"
+            strokeWidth={1.5}
           />
-          <YAxis 
-            domain={[-1, 1]} 
-            axisLine={false} 
-            tickLine={false} 
-            tick={{ fill: '#7090b0', fontSize: 10 }}
+          <XAxis
+            dataKey="index"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: chartColors.muted, fontSize: 11 }}
+            tickFormatter={(i: number) => (i % 10 === 0 ? String(i) : '')}
           />
-          <Tooltip 
-            contentStyle={{ 
-              backgroundColor: '#0d1220', 
-              border: '1px solid #1e3a5f', 
-              borderRadius: '8px',
-              fontSize: '12px'
-            }}
-            labelStyle={{ display: 'none' }}
+          <YAxis
+            domain={[-1, 1]}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: chartColors.muted, fontSize: 11 }}
+            tickCount={5}
           />
-          <ReferenceLine 
-            y={0} 
-            stroke="#ff3333" 
-            strokeDasharray="3 3" 
-            label={{ value: 'Anomaly Threshold', position: 'insideBottomRight', fill: '#ff3333', fontSize: 10 }} 
+          <Tooltip
+            contentStyle={tooltipStyle}
+            labelFormatter={() => 'Sample'}
+            formatter={(value: number | string) => [Number(value).toFixed(3), 'score']}
           />
-          <Area 
-            type="monotone" 
-            dataKey="score" 
-            stroke="#00d4ff" 
-            strokeWidth={2}
-            fillOpacity={1} 
-            fill="url(#colorScore)" 
+          <Area
+            type="monotone"
+            dataKey="score"
+            stroke="#c3c8d1"
+            strokeWidth={1.5}
+            fill="rgba(152,160,173,0.06)"
             isAnimationActive={false}
           />
         </AreaChart>

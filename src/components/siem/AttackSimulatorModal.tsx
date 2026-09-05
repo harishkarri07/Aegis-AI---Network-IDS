@@ -1,16 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Play, CheckCircle2, FlaskConical } from 'lucide-react';
 import {
-  Zap,
-  X,
-  ShieldAlert,
-  Play,
-  CheckCircle,
-  Terminal,
-  Activity,
-  Layers
-} from 'lucide-react';
+  Button,
+  Dialog,
+  Input,
+  Label,
+  cn
+} from '../ui';
 
 interface AttackSimulatorModalProps {
   isOpen: boolean;
@@ -35,32 +33,32 @@ export const AttackSimulatorModal: React.FC<AttackSimulatorModalProps> = ({
   const scenarios = [
     {
       id: 'ssh_brute_force',
-      name: 'SSH Brute Force Attack',
-      description: 'Generates 5 rapid failed SSH login events targeting root/admin from an external attacker IP (triggers RULE-AUTH-001).',
+      name: 'SSH brute force',
+      description: 'Rapid failed SSH logins from an external attacker (triggers RULE-AUTH-001).',
       defaultCount: 5
     },
     {
       id: 'attack_chain_compromise',
-      name: 'Multi-Stage Compromise Chain',
-      description: 'Generates Brute Force -> Successful Initial Access Login -> Unauthorized Root Sudo Escalation. Triggers correlated high-risk Incident.',
+      name: 'Multi-stage compromise',
+      description: 'Brute force → successful login → unauthorized root escalation (correlated incident).',
       defaultCount: 6
     },
     {
       id: 'port_scan',
-      name: 'Port Reconnaissance & Scan',
-      description: 'Generates rapid TCP scan connections across 10 distinct service ports to simulate discovery probes (triggers RULE-NET-001).',
+      name: 'Port reconnaissance',
+      description: 'Rapid TCP scans across 10 service ports to simulate discovery probes (RULE-NET-001).',
       defaultCount: 10
     },
     {
       id: 'root_login',
-      name: 'Direct Root SSH Login',
-      description: 'Simulates direct external SSH login to root account (triggers RULE-AUTH-004).',
+      name: 'Direct root login',
+      description: 'External SSH login directly to the root account (triggers RULE-AUTH-004).',
       defaultCount: 1
     },
     {
       id: 'privilege_denial',
-      name: 'Unauthorized Sudo Escalation Burst',
-      description: 'Simulates 3 consecutive denied sudo password attempts by standard user (triggers RULE-PRIV-002).',
+      name: 'Sudo escalation burst',
+      description: 'Repeated denied sudo attempts by a standard user (triggers RULE-PRIV-002).',
       defaultCount: 3
     }
   ];
@@ -90,112 +88,103 @@ export const AttackSimulatorModal: React.FC<AttackSimulatorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-[#0f172a] border border-[#1e3a5f] rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative">
-        <div className="flex items-center justify-between border-b border-[#1e3a5f] pb-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-[#00d4ff]" />
-            <h3 className="font-bold text-sm text-white">
-              Deterministic Attack Scenario Simulator
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-[#7090b0] hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <p className="text-xs text-[#7090b0]">
-          Inject realistic security event sequences directly into the Aegis Ingestion Pipeline to test rule firing, sliding-window thresholds, and incident correlation.
+    <Dialog
+      onClose={onClose}
+      eyebrow="Test data — simulated events"
+      title="Attack scenario simulator"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={handleRunSimulation} disabled={isRunning}>
+            <Play className={cn('w-3.5 h-3.5', isRunning && 'animate-spin')} />
+            {isRunning ? 'Executing…' : 'Run scenario'}
+          </Button>
+        </>
+      }
+      wide
+    >
+      <div className="space-y-5">
+        <p className="text-caption text-secondary leading-relaxed">
+          Inject realistic security event sequences into the ingestion pipeline to test rule firing,
+          sliding-window thresholds, and incident correlation. Events are marked as simulated.
         </p>
 
-        {/* Scenario Selection */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-[#7090b0] uppercase tracking-wider block">
-            Select Attack Vector
-          </label>
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+        <div>
+          <Label>Attack vector</Label>
+          <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
             {scenarios.map((s) => (
-              <div
+              <button
                 key={s.id}
                 onClick={() => {
                   setScenario(s.id);
                   setCount(s.defaultCount);
                 }}
-                className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                className={cn(
+                  'w-full text-left p-3 rounded-card border transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
                   scenario === s.id
-                    ? 'bg-[#1e293b] border-[#00d4ff]'
-                    : 'bg-[#0a0e1a] border-[#1e3a5f] hover:border-[#7090b0]'
-                }`}
+                    ? 'bg-surface-2 border-hairline-strong'
+                    : 'bg-canvas-deep border-hairline hover:border-hairline-strong'
+                )}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-white">{s.name}</span>
-                  <span className="font-mono text-[10px] text-[#00d4ff] font-semibold">{s.id}</span>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-caption font-semibold text-primary">{s.name}</span>
+                  <span className="text-micro font-mono text-muted">{s.id}</span>
                 </div>
-                <p className="text-[11px] text-[#7090b0]">{s.description}</p>
-              </div>
+                <p className="text-caption text-secondary leading-relaxed">{s.description}</p>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Config Inputs */}
-        <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] uppercase font-bold text-[#7090b0] block mb-1">
-              Target Hostname
-            </label>
-            <input
+            <Label htmlFor="sim-hostname">Target hostname</Label>
+            <Input
+              id="sim-hostname"
+              className="font-mono"
               type="text"
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
-              className="w-full px-3 py-1.5 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-white font-mono"
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase font-bold text-[#7090b0] block mb-1">
-              Source Attacker IP
-            </label>
-            <input
+            <Label htmlFor="sim-source-ip">Source attacker IP</Label>
+            <Input
+              id="sim-source-ip"
+              className="font-mono"
               type="text"
               value={sourceIp}
               onChange={(e) => setSourceIp(e.target.value)}
-              className="w-full px-3 py-1.5 bg-[#0a0e1a] border border-[#1e3a5f] rounded-lg text-white font-mono"
             />
           </div>
         </div>
 
-        {/* Results Banner */}
         {result && (
-          <div className="p-3 bg-[#00ff88]/10 border border-[#00ff88]/40 rounded-lg text-xs space-y-1">
-            <div className="flex items-center gap-1.5 text-[#00ff88] font-bold">
-              <CheckCircle className="w-4 h-4" />
-              Scenario Ingested & Evaluated Successfully!
-            </div>
-            <div className="text-[#b0c4de] text-[11px]">
-              Events generated: <strong>{result.events_generated}</strong> | Alerts created: <strong className="text-[#ffaa00]">{result.alerts_created}</strong> | Incidents created: <strong className="text-[#ff3366]">{result.incidents_created}</strong>
-            </div>
+          <div className="p-3.5 rounded-card border border-hairline bg-surface-2 space-y-2">
+            {result.error ? (
+              <div className="flex items-center gap-2 text-caption font-medium text-critical">
+                <FlaskConical className="w-4 h-4" />
+                {result.error}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-caption font-medium text-success">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Scenario ingested and evaluated
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted tabular-nums">
+                  <span>Events: <strong className="text-primary">{result.events_generated}</strong></span>
+                  <span>Alerts: <strong className="text-primary">{result.alerts_created}</strong></span>
+                  <span>Incidents: <strong className="text-primary">{result.incidents_created}</strong></span>
+                </div>
+              </>
+            )}
           </div>
         )}
-
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-[#1e3a5f] hover:bg-[#1e3a5f]/80 text-white rounded-lg text-xs font-bold"
-          >
-            Close
-          </button>
-          <button
-            onClick={handleRunSimulation}
-            disabled={isRunning}
-            className="px-4 py-2 bg-[#00d4ff] hover:bg-white text-[#0a0e1a] rounded-lg text-xs font-black transition-all flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
-            {isRunning ? 'Executing...' : 'Run Scenario'}
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 };

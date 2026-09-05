@@ -1,27 +1,32 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Copy, Check, FileSpreadsheet, RefreshCw, FileText } from 'lucide-react';
 import {
-  FileText,
-  Download,
-  RefreshCw,
-  FileSpreadsheet,
-  Check
-} from 'lucide-react';
+  Button,
+  Card,
+  ErrorBanner,
+  LoadingBlock,
+  SectionHeader
+} from '../ui';
 
 export const ReportsView: React.FC = () => {
   const [markdownReport, setMarkdownReport] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [copied, setCopied] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchReport = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/siem/reports?format=markdown');
+      if (!res.ok) throw new Error(`Report request failed (${res.status})`);
       const text = await res.text();
       setMarkdownReport(text);
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : 'Could not load the report.');
     } finally {
       setIsLoading(false);
     }
@@ -38,59 +43,61 @@ export const ReportsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#00d4ff]" />
-            SOC Executive & Compliance Reports
-          </h2>
-          <p className="text-xs text-[#7090b0] mt-0.5">
-            Automated security summaries, incident telemetry audits, and CSV export for incident post-mortems.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Audit reports"
+        description="Automated security summaries, incident telemetry audits, and CSV export for post-incident review."
+        actions={
+          <>
+            <Button variant="secondary" onClick={fetchReport} disabled={isLoading}>
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Regenerate
+            </Button>
+            <Button variant="secondary" onClick={handleCopy} disabled={isLoading || !markdownReport}>
+              {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copied' : 'Copy report'}
+            </Button>
+            <a
+              href="/api/siem/reports?format=csv"
+              download="aegis_siem_alerts.csv"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-control text-caption font-medium whitespace-nowrap select-none bg-accent text-white hover:bg-accent-hover active:bg-accent-pressed transition-colors"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Export alerts CSV
+            </a>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchReport}
-            disabled={isLoading}
-            className="px-3 py-1.5 bg-[#1e3a5f] hover:bg-[#1e3a5f]/80 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Regenerate
-          </button>
-
-          <button
-            onClick={handleCopy}
-            className="px-3 py-1.5 bg-[#1e3a5f] hover:bg-[#1e3a5f]/80 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-[#00ff88]" /> : <FileText className="w-3.5 h-3.5" />}
-            {copied ? 'Copied' : 'Copy MD'}
-          </button>
-
-          <a
-            href="/api/siem/reports?format=csv"
-            download="aegis_siem_alerts.csv"
-            className="px-3 py-1.5 bg-[#00d4ff] hover:bg-white text-[#0a0e1a] rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            Export Alerts CSV
-          </a>
-        </div>
-      </div>
-
-      <div className="bg-[#111827] border border-[#1e3a5f] p-6 rounded-xl">
+      <Card className="p-6">
         {isLoading ? (
-          <div className="py-16 text-center text-xs text-[#7090b0] flex flex-col items-center gap-2">
-            <RefreshCw className="w-6 h-6 animate-spin text-[#00d4ff]" />
-            Generating dynamic SOC executive report from SQLite audit log...
+          <div className="py-10 text-center flex flex-col items-center gap-3">
+            <LoadingBlock rows={6} className="max-w-xl w-full" />
+            <p className="text-caption text-muted">Generating report from the SQLite audit log…</p>
           </div>
+        ) : error ? (
+          <ErrorBanner
+            title="Report unavailable"
+            description="The report could not be generated right now."
+            detail={error}
+            action={
+              <Button variant="secondary" size="sm" onClick={fetchReport}>
+                Try again
+              </Button>
+            }
+          />
         ) : (
-          <pre className="font-mono text-xs text-[#b0c4de] whitespace-pre-wrap leading-relaxed overflow-x-auto">
-            {markdownReport}
-          </pre>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-caption text-muted">
+              <FileText className="w-4 h-4" />
+              Markdown report
+            </div>
+            <pre className="font-mono text-caption text-secondary whitespace-pre-wrap leading-relaxed overflow-x-auto">
+              {markdownReport || '(Empty report)'}
+            </pre>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };

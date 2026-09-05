@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import '@fontsource-variable/inter'
 import '../index.css'
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export default function RootLayout({
       <head>
         {process.env.NODE_ENV === 'production' && <base href="./" />}
       </head>
-      <body style={{ backgroundColor: '#0a0e1a' }} suppressHydrationWarning>
+      <body style={{ backgroundColor: '#0c0e12' }} suppressHydrationWarning>
         {children}
       </body>
     </html>

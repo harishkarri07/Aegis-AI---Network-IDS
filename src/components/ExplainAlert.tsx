@@ -4,10 +4,21 @@
  */
 
 import React, { useState } from 'react';
-import { Search, ShieldAlert, Info, CheckCircle, AlertCircle, FileCode } from 'lucide-react';
+import { Search, ShieldAlert, Info, CheckCircle2, AlertCircle, FileCode } from 'lucide-react';
 import { AttackCategory, Packet, AttackExplanation } from '../types';
-import { ConfidenceGauge } from './ConfidenceGauge';
 import { DetectionEngine } from '../lib/capture/detection-engine';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Chip,
+  InlineConfidence,
+  Label,
+  SectionHeader,
+  Select,
+  SeverityChip,
+  cn
+} from './ui';
 
 export const ExplainAlert: React.FC = () => {
   const [selectedType, setSelectedType] = useState<AttackCategory>('DoS');
@@ -55,139 +66,130 @@ export const ExplainAlert: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="ids-card">
-        <h3 className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-          <Search className="w-4 h-4 text-neon-blue" />
-          Deterministic Rule & Threat Vector Explainer
-        </h3>
-        
+    <div className="space-y-5">
+      <SectionHeader
+        title="Explain a detection"
+        description="Select a threat category to see exactly which deterministic indicators trigger it, why they matter, and what to do about it."
+      />
+
+      <Card className="p-5">
         <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 space-y-2">
-            <label htmlFor="explain-vector-select" className="text-[10px] text-text-dim uppercase font-bold">Select Threat Classification Category</label>
-            <select 
+          <div className="flex-1 space-y-2 min-w-0">
+            <Label htmlFor="explain-vector-select">Threat classification category</Label>
+            <Select
               id="explain-vector-select"
               suppressHydrationWarning
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value as AttackCategory)}
-              className="w-full bg-bg-primary border border-border-dim rounded-lg px-4 py-2.5 text-sm font-bold focus:outline-none focus:border-neon-blue transition-colors"
+              className="w-full"
             >
               <option value="DoS">Denial of Service (DoS)</option>
               <option value="Probe">Network Probing / Scanning</option>
               <option value="R2L">Remote-to-Local (R2L)</option>
               <option value="U2R">User-to-Root (U2R Proxy Signal)</option>
               <option value="NORMAL">Normal Baseline Traffic</option>
-            </select>
+            </Select>
           </div>
-          <button 
+          <Button
             id="evaluate-rule-btn"
             suppressHydrationWarning
+            variant="primary"
             onClick={generateExplanation}
             disabled={loading}
-            className="bg-neon-blue text-bg-primary px-6 py-2.5 rounded-lg font-bold hover:bg-white transition-all disabled:opacity-50 flex items-center gap-2"
+            className="shrink-0"
           >
             {loading ? (
-              <div className="w-4 h-4 border-2 border-bg-primary border-t-transparent rounded-full animate-spin" />
+              <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
             ) : (
-              <ShieldAlert className="w-4 h-4" />
+              <ShieldAlert className="w-3.5 h-3.5" />
             )}
-            Evaluate Deterministic Indicators
-          </button>
+            Evaluate deterministic indicators
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {explanation && sampleVector && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <div className="ids-card">
-              <h4 className="text-[10px] text-text-dim uppercase font-bold mb-4 flex items-center gap-2">
-                <FileCode className="w-4 h-4 text-neon-blue" />
-                Detection Logic Summary
-              </h4>
-              <div className="p-4 bg-white/5 rounded-lg border border-white/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-white">{explanation.attack_name}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    explanation.severity === 'CRITICAL' ? 'bg-neon-red/20 text-neon-red border border-neon-red/30' :
-                    explanation.severity === 'HIGH' ? 'bg-neon-orange/20 text-neon-orange border border-neon-orange/30' :
-                    explanation.severity === 'MEDIUM' ? 'bg-neon-pink/20 text-neon-pink border border-neon-pink/30' :
-                    'bg-neon-green/20 text-neon-green border border-neon-green/30'
-                  }`}>
-                    {explanation.severity}
-                  </span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <div className="lg:col-span-1 space-y-4">
+            <Card className="p-5">
+              <CardHeader title="Detection logic summary" icon={FileCode} className="mb-4" />
+              <div className="p-3.5 rounded-well bg-canvas-deep border border-hairline space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-caption font-semibold text-primary">{explanation.attack_name}</span>
+                  <SeverityChip severity={explanation.severity} />
                 </div>
-                <p className="text-xs text-text-dim leading-relaxed font-mono italic">
-                  {explanation.narrative}
-                </p>
+                <p className="text-caption text-secondary leading-relaxed">{explanation.narrative}</p>
               </div>
-              <div className="mt-4 bg-black/20 rounded-lg p-2 border border-white/5">
-                <ConfidenceGauge confidence={sampleVector.confidence || 0.9} />
+              <div className="mt-4 px-1">
+                <InlineConfidence confidence={sampleVector.confidence || 0.9} />
               </div>
-            </div>
+            </Card>
 
-            <div className="ids-card bg-neon-green/5 border-neon-green/20">
-              <h4 className="text-[10px] text-neon-green uppercase font-bold mb-3 flex items-center gap-2">
-                <CheckCircle className="w-3 h-3" />
-                Recommended Response & Mitigation
-              </h4>
-              <p className="text-xs leading-relaxed text-neon-green/80 italic">
-                {explanation.mitigation}
-              </p>
-            </div>
+            <Card className="p-5">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <h4 className="text-caption font-semibold text-primary">Recommended response</h4>
+                  <p className="text-caption text-secondary leading-relaxed mt-1">{explanation.mitigation}</p>
+                </div>
+              </div>
+            </Card>
           </div>
 
-          <div className="lg:col-span-2 space-y-6">
-            <div className="ids-card">
-              <h4 className="text-[10px] text-text-dim uppercase font-bold mb-4 flex items-center gap-2">
-                <Info className="w-4 h-4 text-neon-blue" />
-                Triggered Heuristic Indicators & Thresholds
-              </h4>
-              <div className="space-y-3">
+          <div className="lg:col-span-2 space-y-4">
+            <Card className="p-5">
+              <CardHeader
+                title="Triggered heuristic indicators"
+                description="The measured signals and their thresholds behind this classification"
+                icon={Info}
+              />
+              <div className="space-y-2.5">
                 {explanation.indicators.map((ind, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 bg-white/5 rounded-lg border border-white/5">
-                    <div className="mt-1">
-                      <AlertCircle className="w-4 h-4 text-neon-orange" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono font-bold text-white">{ind.feature}</span>
-                        <span className="text-[10px] bg-neon-orange/20 text-neon-orange px-1.5 py-0.5 rounded border border-neon-orange/30">
-                          Observed: {typeof ind.value === 'number' ? ind.value.toFixed(2) : ind.value}
-                        </span>
-                        <span className="text-[10px] text-text-dim">Threshold: {ind.threshold}</span>
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-well bg-canvas-deep border border-hairline">
+                    <AlertCircle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
+                        <span className="text-caption font-mono font-medium text-primary">{ind.feature}</span>
+                        <Chip tone="medium" className="text-micro !py-[2px]">
+                          Observed: {typeof ind.value === 'number' ? ind.value.toFixed(2) : String(ind.value)}
+                        </Chip>
+                        <span className="text-micro text-muted font-mono">Threshold: {ind.threshold}</span>
                       </div>
-                      <p className="text-[11px] text-text-dim">{ind.description}</p>
+                      <p className="text-caption text-secondary leading-relaxed">{ind.description}</p>
                     </div>
                   </div>
                 ))}
                 {explanation.indicators.length === 0 && (
-                  <p className="text-xs text-text-muted italic">No abnormal threshold indicators triggered for this baseline pattern.</p>
+                  <p className="text-caption text-muted italic">No abnormal threshold indicators triggered for this baseline pattern.</p>
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="ids-card">
-              <h4 className="text-[10px] text-text-dim uppercase font-bold mb-4 flex items-center gap-2">
-                <Search className="w-4 h-4 text-neon-blue" />
-                Heuristic Decision Weights
-              </h4>
-              <div className="space-y-4">
+            <Card className="p-5">
+              <CardHeader
+                title="Heuristic decision weights"
+                description="Relative contribution of each feature when this classification fires"
+                icon={Search}
+              />
+              <div className="space-y-3.5">
                 {explanation.top_features.map((feat, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between text-[10px]">
-                      <span className="font-mono text-text-dim">{feat.feature}</span>
-                      <span className="text-neon-blue font-bold">{(feat.importance * 100).toFixed(1)}% weight</span>
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex justify-between gap-4 text-caption">
+                      <span className="font-mono text-secondary truncate">{feat.feature}</span>
+                      <span className="text-primary font-medium tabular-nums shrink-0">
+                        {(feat.importance * 100).toFixed(1)}%
+                      </span>
                     </div>
-                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-neon-blue shadow-[0_0_10px_rgba(0,212,255,0.5)]" 
+                    <div className="h-1 w-full rounded-full bg-surface-2 overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full', i === 0 ? 'bg-accent' : 'bg-muted/60')}
                         style={{ width: `${Math.min(feat.importance * 400, 100)}%` }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           </div>
         </div>
       )}
