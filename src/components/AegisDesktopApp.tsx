@@ -36,6 +36,11 @@ import {
   SIEMDetectionRule
 } from '@/types';
 import { cn, Button, Chip, IconButton } from './ui';
+import {
+  alertSignatureOf,
+  shouldUpdateLatestAlert,
+  type LatestAlertState
+} from '@/lib/alert-state';
 
 // Network IDS Components
 import { LiveMonitor } from './LiveMonitor';
@@ -125,6 +130,15 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
   // state update from blocking the renderer event loop.
   const packetBufferRef = useRef<Packet[]>([]);
   const MAX_RENDERER_BATCH = 100;
+
+  // --- Latest System Alert stabilization ---
+  // The attention card must not repaint on every non-NORMAL packet at ~20 Hz.
+  // A given alert episode (category + rule + source IP) updates the card at
+  // most once per ALERT_SIGNATURE_HOLD_MS; a genuinely different episode
+  // (new source, new rule, or new category such as a DoS confirmation landing
+  // mid-scan) still updates immediately. See src/lib/alert-state.ts.
+  const ALERT_SIGNATURE_HOLD_MS = 4000;
+  const latestAlertRef = useRef<LatestAlertState | null>(null);
 
   // SIEM State
   const [socMetrics, setSocMetrics] = useState<SOCMetrics | null>(null);
@@ -296,9 +310,21 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
       return next.length > 60 ? next.slice(next.length - 60) : next;
     });
     setCaptureError(null);
-    // Only update Latest System Alert for genuine security detections
+    // Only update Latest System Alert for genuine security detections, and
+    // only when the alert represents a meaningful change: the first sighting
+    // of an episode, a different episode, or the same episode re-confirmed
+    // after the hold window. This keeps the card stable under sustained
+    // real capture while every distinct detection stays visible.
     if (lastNonNormal) {
-      setLatestSecurityAlert(lastNonNormal);
+      const signature = alertSignatureOf({
+        category: lastNonNormal.category,
+        rule: lastNonNormal.rule_triggered,
+        srcIp: lastNonNormal.src_ip
+      });
+      if (shouldUpdateLatestAlert(latestAlertRef.current, signature, Date.now(), ALERT_SIGNATURE_HOLD_MS)) {
+        latestAlertRef.current = { signature, updatedAt: Date.now() };
+        setLatestSecurityAlert(lastNonNormal);
+      }
     }
   }, []);
 
