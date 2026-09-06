@@ -170,7 +170,7 @@ export function WebsiteFooter() {
             </li>
             <li>
               <a
-                href="https://github.com"
+                href="https://github.com/harishkarri07/Aegis-AI---Network-IDS"
                 target="_blank"
                 rel="noreferrer"
                 className="hover:text-white transition-colors flex items-center gap-1.5"

@@ -14,9 +14,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {process.env.NODE_ENV === 'production' && <base href="./" />}
-      </head>
       <body style={{ backgroundColor: '#0c0e12' }} suppressHydrationWarning>
         {children}
       </body>

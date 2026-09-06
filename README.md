@@ -106,7 +106,7 @@ When pressed, Aegis toggles monitoring between Standby and Active state (if a va
 # 1. Install dependencies
 npm install
 
-# 2. Run automated test suite (22 unit & integration tests)
+# 2. Run automated test suite
 npm test
 
 # 3. Run desktop app in development
@@ -127,20 +127,16 @@ Packaging outputs will be placed in the `/release-builds` directory.
 
 ## 🌐 GitHub Repository
 
-The official GitHub repository URL will be added after the project is published.
+**https://github.com/harishkarri07/Aegis-AI---Network-IDS**
 
-To initialize and publish this codebase to your own GitHub repository:
+To clone and run locally:
 
 ```bash
-git init
-git add .
-git commit -m "Initial production release"
-git branch -M main
-git remote add origin <YOUR_REAL_GITHUB_REPOSITORY_URL>
-git push -u origin main
+git clone https://github.com/harishkarri07/Aegis-AI---Network-IDS.git
+cd Aegis-AI---Network-IDS
+pnpm install
+pnpm run electron:dev
 ```
-
-*(Note: Replace `<YOUR_REAL_GITHUB_REPOSITORY_URL>` with your actual repository URL).*
 
 ---
 
@@ -183,16 +179,11 @@ v1.0.0
 ### Step 6: Copy Asset URLs
 Copy the direct download URLs for each uploaded artifact from the published release.
 
-### Step 7: Configure Download URLs
-Configure the environment variables in your deployment or `.env.local`:
-```env
-NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL="https://github.com/<OWNER>/<REPO>/releases/download/v1.0.0/Aegis-Network-IDS-Setup.exe"
-NEXT_PUBLIC_MACOS_DOWNLOAD_URL="https://github.com/<OWNER>/<REPO>/releases/download/v1.0.0/Aegis-Network-IDS.dmg"
-NEXT_PUBLIC_LINUX_DOWNLOAD_URL="https://github.com/<OWNER>/<REPO>/releases/download/v1.0.0/Aegis-Network-IDS.AppImage"
-```
-
-### Step 8: Verify Dashboard Download Buttons
-Open the dashboard and open **Download Desktop App**. The modal will automatically display active download buttons pointing to your real release binaries instead of the default **Coming Soon** standby state.
+### Step 7: Verify Dashboard Download Buttons
+The public website's download button points to the stable
+`https://github.com/harishkarri07/Aegis-AI---Network-IDS/releases/latest/download/Aegis-Network-IDS-Setup.exe`
+redirect, which always resolves to the most recent published release. No
+additional configuration is required once a release exists.
 
 ---
 

@@ -12,8 +12,6 @@ import {
   Shield,
   Cpu,
   Info,
-  Copy,
-  Check
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -26,9 +24,7 @@ interface ReleaseConfig {
     arch: string;
     osSupport: string;
     sizeEstimate: string;
-    sha256Placeholder: string;
     downloadUrl: string;
-    prerequisite: string;
     prereqUrl: string;
   };
   macos: {
@@ -36,57 +32,65 @@ interface ReleaseConfig {
     arch: string;
     osSupport: string;
     sizeEstimate: string;
-    sha256Placeholder: string;
     downloadUrl: string;
-    prerequisite: string;
+    prereqUrl: string;
   };
   linux: {
     fileName: string;
     arch: string;
     osSupport: string;
     sizeEstimate: string;
-    sha256Placeholder: string;
     downloadUrl: string;
-    prerequisite: string;
+    prereqUrl: string;
   };
 }
 
+// Repo the public website links to. Keep in sync with the git remote.
+const REPO_URL = 'https://github.com/harishkarri07/Aegis-AI---Network-IDS';
+// Stable "always the newest published release" redirect. GitHub rewrites
+// /releases/latest/download/<file> to the most recent non-prerelease, non-draft
+// release that contains a matching asset. NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL can
+// override this (e.g. for a mirror or a pinned version).
+const LATEST_WINDOWS_URL =
+  process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
+  `${REPO_URL}/releases/latest/download/Aegis-Network-IDS-Setup.exe`;
+// Stable "all releases" page for users who want older builds or release notes.
+const ALL_RELEASES_URL = `${REPO_URL}/releases`;
+
 export function DownloadsCenter() {
   const [detectedOs, setDetectedOs] = useState<'windows' | 'macos' | 'linux' | 'unknown'>('unknown');
-  const [copiedSha, setCopiedSha] = useState<string | null>(null);
 
-  // Data-driven release schema
+  // Data-driven release schema. File names and sizes come from the actual
+  // electron-builder output (dist:win). SHA checksums are intentionally not
+  // shown here — they are published in the GitHub Release notes when a release
+  // is created and must never be a hardcoded placeholder.
   const releaseInfo: ReleaseConfig = {
     version: 'v1.0.0',
-    releaseDate: 'August 2026',
-    channel: 'Stable Production Candidate',
+    releaseDate: 'September 2026',
+    channel: 'Stable · unsigned build',
     windows: {
-      fileName: 'Aegis-Setup-1.0.0.exe',
+      fileName: 'Aegis-Network-IDS-Setup.exe',
       arch: 'x64 (64-bit)',
       osSupport: 'Windows 10 / Windows 11 (64-bit)',
-      sizeEstimate: '~85 MB',
-      sha256Placeholder: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      downloadUrl: (process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || '').trim(),
-      prerequisite: 'Npcap 1.70+ Driver required for promiscuous link-layer capture',
+      sizeEstimate: '~143 MB',
+      downloadUrl: LATEST_WINDOWS_URL,
       prereqUrl: 'https://npcap.com'
     },
     macos: {
-      fileName: 'Aegis-1.0.0-universal.dmg',
+      fileName: 'Aegis-Network-IDS.dmg (not yet published)',
       arch: 'Universal (Apple Silicon M1/M2/M3/M4 & Intel x64)',
       osSupport: 'macOS Monterey (12.0) or higher',
       sizeEstimate: '~90 MB',
-      sha256Placeholder: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
       downloadUrl: (process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL || '').trim(),
-      prerequisite: 'Standard BPF packet capture permissions'
+      prereqUrl: 'https://github.com/harishkarri07/Aegis-AI---Network-IDS/actions'
     },
     linux: {
-      fileName: 'Aegis-1.0.0.AppImage',
+      fileName: 'Aegis-Network-IDS.AppImage (not yet published)',
       arch: 'x86_64 / amd64',
-      osSupport: 'Ubuntu 20.04+, Debian 11+, Fedora 36+, Arch Linux',
+      osSupport: 'Ubuntu 20.04+ / Debian 11+ / Fedora 36+',
       sizeEstimate: '~82 MB',
-      sha256Placeholder: '88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589',
       downloadUrl: (process.env.NEXT_PUBLIC_LINUX_DOWNLOAD_URL || '').trim(),
-      prerequisite: 'libpcap library (libpcap-dev) & CAP_NET_RAW capability'
+      prereqUrl: 'https://github.com/harishkarri07/Aegis-AI---Network-IDS/actions'
     }
   };
 
@@ -102,14 +106,6 @@ export function DownloadsCenter() {
       }
     }
   }, []);
-
-  const handleCopySha = (sha: string, platformKey: string) => {
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(sha);
-      setCopiedSha(platformKey);
-      setTimeout(() => setCopiedSha(null), 2000);
-    }
-  };
 
   return (
     <section className="py-16 sm:py-20 bg-[#070b14] border-b border-[#1e293b]">
@@ -190,49 +186,28 @@ export function DownloadsCenter() {
                 </div>
               </div>
 
-              {/* SHA256 Box */}
-              <div className="bg-[#070b14] p-3 rounded-lg border border-[#1e293b] space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-mono text-[#64748b]">
-                  <span>SHA-256 Checksum:</span>
-                  <button
-                    onClick={() => handleCopySha(releaseInfo.windows.sha256Placeholder, 'win')}
-                    className="hover:text-white flex items-center gap-1"
-                    title="Copy Checksum"
-                  >
-                    {copiedSha === 'win' ? (
-                      <Check className="w-3 h-3 text-[#00ff88]" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] font-mono text-[#94a3b8] truncate">
-                  {releaseInfo.windows.sha256Placeholder}
-                </p>
-              </div>
-
-              {/* Prerequisite Note */}
+              {/* Prerequisite + integrity note: no hardcoded fake SHA-256 */}
               <div className="p-3 bg-[#0f172a] rounded-lg border border-[#1e3a5f] text-[11px] text-[#cbd5e1] flex items-start gap-2">
                 <Info className="w-4 h-4 text-[#00d4ff] shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-white block">Npcap Required:</span>
-                  <span>{releaseInfo.windows.prerequisite}. Download from </span>
+                  <span className="font-bold text-white block">Npcap required</span>
+                  <span>Promiscuous capture needs the free </span>
                   <a
                     href={releaseInfo.windows.prereqUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#00d4ff] hover:underline font-bold"
                   >
-                    npcap.com
+                    Npcap driver
                   </a>
-                  .
+                  {' '}installed first. Installer is a 64-bit NSIS build (unsigned — see notes).
                 </div>
               </div>
             </div>
 
             {/* Action Button */}
             <div className="pt-2">
-              {releaseInfo.windows.downloadUrl ? (
+              <div className="space-y-2">
                 <a
                   href={releaseInfo.windows.downloadUrl}
                   target="_blank"
@@ -242,20 +217,10 @@ export function DownloadsCenter() {
                   <Download className="w-4 h-4" />
                   <span>Download for Windows</span>
                 </a>
-              ) : (
-                <div className="space-y-2">
-                  <button
-                    disabled
-                    className="w-full py-3 px-4 bg-[#131d33] border border-[#1e3a5f] text-[#94a3b8] rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
-                  >
-                    <Download className="w-4 h-4 text-[#00d4ff]" />
-                    <span>Installer Release v1.0.0 Ready</span>
-                  </button>
-                  <p className="text-[10px] text-center text-[#64748b] font-mono">
-                    Direct installer artifact is mapped to release server.
-                  </p>
-                </div>
-              )}
+                <p className="text-[10px] text-center text-[#64748b] font-mono">
+                  Latest stable release · Aegis-Network-IDS-Setup.exe
+                </p>
+              </div>
             </div>
           </div>
 
@@ -296,7 +261,7 @@ export function DownloadsCenter() {
               <div className="space-y-2 pt-2 text-xs font-mono text-[#cbd5e1] border-t border-[#1e293b]/60">
                 <div className="flex justify-between">
                   <span className="text-[#64748b]">Architecture:</span>
-                  <span>Apple Silicon &amp; Intel</span>
+                  <span>{releaseInfo.macos.arch}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#64748b]">Package Format:</span>
@@ -308,63 +273,30 @@ export function DownloadsCenter() {
                 </div>
               </div>
 
-              {/* SHA256 Box */}
-              <div className="bg-[#070b14] p-3 rounded-lg border border-[#1e293b] space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-mono text-[#64748b]">
-                  <span>SHA-256 Checksum:</span>
-                  <button
-                    onClick={() => handleCopySha(releaseInfo.macos.sha256Placeholder, 'mac')}
-                    className="hover:text-white flex items-center gap-1"
-                    title="Copy Checksum"
-                  >
-                    {copiedSha === 'mac' ? (
-                      <Check className="w-3 h-3 text-[#00ff88]" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] font-mono text-[#94a3b8] truncate">
-                  {releaseInfo.macos.sha256Placeholder}
-                </p>
-              </div>
-
               {/* Prerequisite Note */}
               <div className="p-3 bg-[#0f172a] rounded-lg border border-[#1e3a5f] text-[11px] text-[#cbd5e1] flex items-start gap-2">
                 <Info className="w-4 h-4 text-[#00d4ff] shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white block">Permissions:</span>
-                  <span>{releaseInfo.macos.prerequisite}. Granted on first launch.</span>
+                  <span>BPF packet capture permission is granted on first launch.</span>
                 </div>
               </div>
             </div>
 
             {/* Action Button */}
             <div className="pt-2">
-              {releaseInfo.macos.downloadUrl ? (
-                <a
-                  href={releaseInfo.macos.downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download for macOS</span>
-                </a>
-              ) : (
-                <div className="space-y-2">
-                  <button
-                    disabled
-                    className="w-full py-3 px-4 bg-[#131d33] border border-[#1e3a5f] text-[#94a3b8] rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
-                  >
-                    <Download className="w-4 h-4 text-[#00d4ff]" />
-                    <span>Installer Release v1.0.0 Ready</span>
-                  </button>
-                  <p className="text-[10px] text-center text-[#64748b] font-mono">
-                    Direct installer artifact is mapped to release server.
-                  </p>
-                </div>
-              )}
+              <a
+                href={ALL_RELEASES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3.5 bg-[#131d33] hover:bg-[#1e293b] text-white border border-[#1e3a5f] rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4 text-[#00d4ff]" />
+                <span>macOS build — follow Releases</span>
+              </a>
+              <p className="text-[10px] text-center text-[#64748b] font-mono">
+                Published when a macOS release is tagged (see GitHub Releases).
+              </p>
             </div>
           </div>
 
@@ -417,63 +349,30 @@ export function DownloadsCenter() {
                 </div>
               </div>
 
-              {/* SHA256 Box */}
-              <div className="bg-[#070b14] p-3 rounded-lg border border-[#1e293b] space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-mono text-[#64748b]">
-                  <span>SHA-256 Checksum:</span>
-                  <button
-                    onClick={() => handleCopySha(releaseInfo.linux.sha256Placeholder, 'linux')}
-                    className="hover:text-white flex items-center gap-1"
-                    title="Copy Checksum"
-                  >
-                    {copiedSha === 'linux' ? (
-                      <Check className="w-3 h-3 text-[#00ff88]" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] font-mono text-[#94a3b8] truncate">
-                  {releaseInfo.linux.sha256Placeholder}
-                </p>
-              </div>
-
               {/* Prerequisite Note */}
               <div className="p-3 bg-[#0f172a] rounded-lg border border-[#1e3a5f] text-[11px] text-[#cbd5e1] flex items-start gap-2">
                 <Info className="w-4 h-4 text-[#00d4ff] shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-white block">Prerequisite:</span>
-                  <span>{releaseInfo.linux.prerequisite}</span>
+                  <span>libpcap library (libpcap-dev) and the CAP_NET_RAW capability.</span>
                 </div>
               </div>
             </div>
 
             {/* Action Button */}
             <div className="pt-2">
-              {releaseInfo.linux.downloadUrl ? (
-                <a
-                  href={releaseInfo.linux.downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download for Linux</span>
-                </a>
-              ) : (
-                <div className="space-y-2">
-                  <button
-                    disabled
-                    className="w-full py-3 px-4 bg-[#131d33] border border-[#1e3a5f] text-[#94a3b8] rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
-                  >
-                    <Download className="w-4 h-4 text-[#00d4ff]" />
-                    <span>Installer Release v1.0.0 Ready</span>
-                  </button>
-                  <p className="text-[10px] text-center text-[#64748b] font-mono">
-                    Direct installer artifact is mapped to release server.
-                  </p>
-                </div>
-              )}
+              <a
+                href={ALL_RELEASES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3.5 bg-[#131d33] hover:bg-[#1e293b] text-white border border-[#1e3a5f] rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4 text-[#00d4ff]" />
+                <span>Linux build — follow Releases</span>
+              </a>
+              <p className="text-[10px] text-center text-[#64748b] font-mono">
+                AppImage / .deb published when a Linux release is tagged.
+              </p>
             </div>
           </div>
         </div>
