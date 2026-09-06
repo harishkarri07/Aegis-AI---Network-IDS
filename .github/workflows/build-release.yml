@@ -34,12 +34,13 @@ jobs:
           run_install: false
 
       - name: Install dependencies
-        # --ignore-scripts: skip the postinstall electron-rebuild. The test job
-        # runs pure TypeScript tests via tsx and never loads the native `cap`
-        # module (Windows-only Npcap), so rebuilding native addons on Ubuntu CI
-        # is unnecessary and fails. The build-desktop job runs electron-rebuild
-        # explicitly against its target OS after this.
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # No --frozen-lockfile: pnpm 9 on Linux resolves optional native deps
+        # (cap, Windows-only) differently from the Windows-generated lockfile,
+        # and --frozen-lockfile makes pnpm refuse to reconcile. The test job
+        # runs pure TypeScript tests via tsx and never loads native modules, so
+        # a non-frozen install is safe. --ignore-scripts skips the postinstall
+        # electron-rebuild (unnecessary here; build-desktop runs it explicitly).
+        run: pnpm install --ignore-scripts
 
       - name: Run Deterministic Engine Tests
         run: pnpm test
