@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { app, BrowserWindow, ipcMain, globalShortcut, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, Menu, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -13,6 +13,7 @@ import { CaptureService } from '../src/lib/capture/capture-service';
 import { DetectionEngine } from '../src/lib/capture/detection-engine';
 import { AttackCategory, Packet } from '../src/types';
 import { ingestSecurityPayload } from '../src/lib/siem-service';
+import { isRequestAllowed, MAX_API_BODY_BYTES } from '../src/lib/local-server-guard';
 
 let mainWindow: BrowserWindow | null = null;
 let currentSelectedInterface: string = '';
@@ -361,6 +362,25 @@ function getContentType(filePath: string): string {
 
 // Function to handle HTTP requests
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse, outDirectory: string): void {
+  // --- Loopback request guard (src/lib/local-server-guard.ts) ---
+  // Blocks DNS-rebinding Host headers and browser-initiated cross-origin
+  // state changes ("drive-by" SIEM pollution from any website open in any
+  // local browser). Non-browser clients (Python endpoint agent, curl) send
+  // no Origin/Sec-Fetch-Site headers and remain supported. The exact policy
+  // is unit-tested in tests/local-server-guard.test.ts.
+  const guard = isRequestAllowed({
+    method: req.method || 'GET',
+    host: typeof req.headers.host === 'string' ? req.headers.host : undefined,
+    origin: typeof req.headers.origin === 'string' ? req.headers.origin : undefined,
+    secFetchSite: typeof req.headers['sec-fetch-site'] === 'string' ? (req.headers['sec-fetch-site'] as string) : undefined,
+  });
+  if (!guard.allowed) {
+    console.warn(`[Electron] Blocked suspicious local request (${req.method} ${req.url}): ${guard.reason}`);
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: guard.reason || 'Forbidden' }));
+    return;
+  }
+
   // Parse URL
   const parsedUrl = new URL(req.url || '', `http://${req.headers.host}`);
   let pathname = parsedUrl.pathname;
@@ -377,28 +397,42 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse, outD
   if (pathname.startsWith('/api/siem/')) {
     const method = req.method || 'GET';
     let body = '';
+    let bodyRejected = false;
 
-    req.on('data', (chunk) => { body += chunk; });
+    req.on('data', (chunk) => {
+      if (bodyRejected) return;
+      body += chunk;
+      // Memory-safety cap: reject oversized bodies instead of buffering
+      // unbounded POST data in the main process. Real ingest batches stay
+      // far below this limit (capture flushes cap at 500 events).
+      if (body.length > MAX_API_BODY_BYTES) {
+        bodyRejected = true;
+        if (!res.headersSent) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'SIEM API request body too large' }));
+        }
+        req.destroy();
+        return;
+      }
+    });
     req.on('end', async () => {
+      if (bodyRejected) return;
       const { status, data } = await handleSiemApiRequest(pathname, method, body || null, req.url || '');
-      res.writeHead(status, {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      });
+      // Same-origin responses: no CORS headers on purpose. The renderer is
+      // always served from this exact origin, and wildcard CORS previously
+      // allowed any website in any local browser to read and mutate SIEM data.
+      res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(data);
     });
+    req.on('error', () => { /* request aborted/destroyed; nothing to do */ });
     return;
   }
 
-  // Handle CORS preflight for API routes
+  // CORS preflight: same-origin requests never require preflight and
+  // cross-origin requests are rejected by the guard above, so a bare 204
+  // is sufficient (no wildcard CORS headers).
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    });
+    res.writeHead(204);
     res.end();
     return;
   }
@@ -448,6 +482,40 @@ function createWindow() {
     },
   });
 
+  // --- Navigation hardening (Electron security checklist) ---
+  // The app shell may only navigate within its own origin. External URLs
+  // (npcap.com / github.com links on the website pages) open in the system
+  // browser instead of an Electron window. Same-origin popups (Devices view
+  // → window.open('/downloads', '_blank')) keep their existing behavior.
+  const isSameOriginWithApp = (url: string): boolean => {
+    try {
+      const current = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : '';
+      if (!current) return false;
+      return new URL(url).origin === new URL(current).origin;
+    } catch {
+      return false;
+    }
+  };
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSameOriginWithApp(url)) {
+      return { action: 'allow' };
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url).catch(() => { /* best effort */ });
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isSameOriginWithApp(url)) {
+      event.preventDefault();
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url).catch(() => { /* best effort */ });
+      }
+    }
+  });
+
   // Load the Next.js app
   const startUrlProcess = process.env.START_URL;
   const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
@@ -481,14 +549,55 @@ function createWindow() {
     // substring, causing hangs.
     const outDirectory = path.join(__dirname, '../../out');
 
-    // Start static + API server first, then load the page
-    portServer = http.createServer((req, res) => handleRequest(req, res, outDirectory));
-    portServer.listen(3000, '127.0.0.1', () => {
-      console.log('[Electron] Static + SIEM API server listening on http://localhost:3000');
-      // Boot directly into the operational console (FINAL_AEGIS_UI_BLUEPRINT.md §20).
-      // The Next.js static export writes the console to out/app.html; the SPA fallback
-      // in handleRequest resolves /app to that file.
-      mainWindow.loadURL('http://localhost:3000/app');
+    const getServerPort = (server: http.Server): number => {
+      const address = server.address();
+      return address && typeof address === 'object' ? address.port : 3000;
+    };
+
+    const startAppServer = (port: number): Promise<http.Server> =>
+      new Promise((resolve, reject) => {
+        const server = http.createServer((req, res) => handleRequest(req, res, outDirectory));
+        server.on('error', (err: NodeJS.ErrnoException) => {
+          if (!server.listening) {
+            reject(err);
+          } else {
+            // Post-listen errors are logged, not fatal: the UI keeps working.
+            console.error(`[Electron] Static/API server error: ${err.message}`);
+          }
+        });
+        server.listen(port, '127.0.0.1', () => resolve(server));
+      });
+
+    // Start static + API server first, then load the page.
+    const bootProductionUi = async (): Promise<void> => {
+      // Reuse a running server when the window is re-created (macOS activate);
+      // binding twice would throw EADDRINUSE.
+      if (!(portServer && portServer.listening)) {
+        try {
+          portServer = await startAppServer(3000);
+        } catch (err: any) {
+          if ((err as NodeJS.ErrnoException)?.code !== 'EADDRINUSE') {
+            throw err;
+          }
+          // Reliability fallback: another local service already owns port 3000.
+          // Bind an ephemeral port instead of crashing the main process.
+          console.warn('[Electron] Port 3000 is busy; falling back to an ephemeral port');
+          portServer = await startAppServer(await getFreePort());
+        }
+        console.log(`[Electron] Static + SIEM API server listening on http://127.0.0.1:${getServerPort(portServer)}`);
+      }
+      const port = getServerPort(portServer);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // Boot directly into the operational console (FINAL_AEGIS_UI_BLUEPRINT.md §20).
+        // The Next.js static export writes the console to out/app.html; the SPA fallback
+        // in handleRequest resolves /app to that file. Bind to 127.0.0.1 explicitly —
+        // the server also listens on 127.0.0.1 only.
+        mainWindow.loadURL(`http://127.0.0.1:${port}/app`);
+      }
+    };
+
+    bootProductionUi().catch((error) => {
+      console.error(`[Electron] Failed to start static/API server: ${error}`);
     });
   }
 }
