@@ -166,7 +166,11 @@ jobs:
           run_install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # --ignore-scripts: the deploy job only builds the static Next.js site
+        # and never loads the native `cap` capture module. Skipping postinstall
+        # avoids an unnecessary electron-rebuild (which requires libpcap-dev /
+        # Npcap headers not installed here).
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build static website
         # basePath is required because the site lives at
