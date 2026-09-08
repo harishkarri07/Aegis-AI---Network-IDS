@@ -67,6 +67,7 @@
     "entitlementsInherit": "electron/entitlements.mac.plist"
   },
   "linux": {
+    "maintainer": "Aegis Cyber-Defense Systems <kksharish43@gmail.com>",
     "target": ["AppImage", "deb"],
     "artifactName": "Aegis-Network-IDS.AppImage",
     "category": "Network",
