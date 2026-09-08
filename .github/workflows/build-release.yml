@@ -206,8 +206,17 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          # Unique per run attempt (github.run_attempt increments on every re-run),
+          # so a re-run of this job can never leave a second artifact with the same
+          # name that deploy-pages consumes below (artifacts are immutable in v4).
+          name: github-pages-${{ github.run_attempt }}
           path: out
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Consumes the same unique artifact name uploaded above. On a re-run,
+          # github.run_attempt increments, so exactly one artifact matches this
+          # name and deploy-pages no longer sees duplicate "github-pages" artifacts.
+          artifact_name: github-pages-${{ github.run_attempt }}
