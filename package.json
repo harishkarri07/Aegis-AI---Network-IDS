@@ -13,9 +13,9 @@
     "postinstall": "npm run rebuild",
     "electron:dev": "npm run compile:electron && electron .",
     "electron:build": "next build && npm run compile:electron && electron-builder",
-    "dist:win": "next build && npm run compile:electron && electron-builder --win",
-    "dist:mac": "next build && npm run compile:electron && electron-builder --mac",
-    "dist:linux": "next build && npm run compile:electron && electron-builder --linux",
+    "dist:win": "next build && npm run compile:electron && electron-builder --win --publish never",
+    "dist:mac": "next build && npm run compile:electron && electron-builder --mac --publish never",
+    "dist:linux": "next build && npm run compile:electron && electron-builder --linux --publish never",
     "test": "tsx tests/detection.test.ts && tsx tests/probe-semantics.test.ts && tsx tests/rate-stats.test.ts && tsx tests/icmp-semantics.test.ts && tsx tests/alert-state.test.ts && tsx tests/local-server-guard.test.ts"
   },
   "dependencies": {

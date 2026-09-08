@@ -102,7 +102,30 @@ jobs:
         run: pnpm run compile:electron
 
       - name: Package Desktop Binary (${{ matrix.target }})
-        run: pnpm run dist:${{ matrix.target }}
+        # Capture the full packaging output to a per-target log file. We use
+        # PowerShell (pwsh) because it ships preinstalled on every GitHub-hosted
+        # runner (Windows, macOS, Linux), giving one genuinely cross-platform
+        # script. On failure the last 120 lines are printed to the Actions
+        # console and the complete log is uploaded as an artifact. `exit $code`
+        # re-raises the original packaging exit code so the job still fails.
+        id: package-desktop
+        shell: pwsh
+        run: |
+          $logFile = "package-${{ matrix.target }}.log"
+          pnpm run dist:${{ matrix.target }} *> $logFile
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Host "===== Last 120 lines of $logFile ====="
+            Get-Content $logFile -Tail 120
+          }
+          exit $code
+
+      - name: Upload packaging log on failure
+        if: failure() && steps.package-desktop.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}-log
+          path: package-${{ matrix.target }}.log
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
