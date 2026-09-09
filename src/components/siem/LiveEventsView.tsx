@@ -18,6 +18,7 @@ import {
   tdClass,
   thClass
 } from '../ui';
+import { formatLocalTime, formatLocalDateTimeWithZone } from '@/lib/time-format';
 
 interface LiveEventsViewProps {
   events: SecurityEvent[];
@@ -105,7 +106,7 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
           <table className="w-full text-left">
             <thead>
               <tr>
-                <th className={thClass}>Time (UTC)</th>
+                <th className={thClass}>Time</th>
                 <th className={thClass}>Host / device</th>
                 <th className={thClass}>Event</th>
                 <th className={thClass}>Status</th>
@@ -119,7 +120,7 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
               {filteredEvents.map((ev) => (
                 <tr key={ev.id} className="hover:bg-surface-2/50 transition-colors">
                   <td className={cn(tdClass, 'font-mono text-muted tabular-nums whitespace-nowrap')}>
-                    {ev.timestamp?.substring(11, 19) || 'N/A'}
+                    {ev.timestamp ? formatLocalTime(ev.timestamp) : 'N/A'}
                   </td>
                   <td className={cn(tdClass, 'text-primary font-medium whitespace-nowrap')}>{ev.hostname}</td>
                   <td className={cn(tdClass, 'whitespace-nowrap')}>
@@ -173,7 +174,8 @@ export const LiveEventsView: React.FC<LiveEventsViewProps> = ({
           <div className="space-y-5">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <Field label="Event ID" mono value={selectedEvent.id} />
-              <Field label="Timestamp (UTC)" mono value={selectedEvent.timestamp} />
+              <Field label="Detected (local)" mono value={formatLocalDateTimeWithZone(selectedEvent.timestamp)} />
+              <Field label="Canonical (UTC)" mono value={selectedEvent.timestamp} />
               <Field label="Host & device" mono value={selectedEvent.hostname} />
               <Field
                 label="Source IP / port"

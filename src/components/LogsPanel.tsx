@@ -20,6 +20,7 @@ import {
   tdClass,
   thClass
 } from './ui';
+import { formatLocalTime } from '../lib/time-format';
 
 interface LogsPanelProps {
   history: Packet[];
@@ -108,7 +109,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({ history }) => {
           <table className="w-full text-left">
             <thead>
               <tr>
-                <th className={thClass}>Time (UTC)</th>
+                <th className={thClass}>Time</th>
                 <th className={thClass}>Category</th>
                 <th className={thClass}>Flow</th>
                 <th className={thClass}>Port</th>
@@ -121,7 +122,7 @@ export const LogsPanel: React.FC<LogsPanelProps> = ({ history }) => {
               {rows.map((p) => (
                 <tr key={p.id} className="hover:bg-surface-2/50 transition-colors">
                   <td className={cn(tdClass, 'font-mono text-muted tabular-nums whitespace-nowrap')}>
-                    {p.timestamp.length >= 19 ? p.timestamp.substring(11, 19) : p.timestamp}
+                    {formatLocalTime(p.timestamp)}
                   </td>
                   <td className={tdClass}>
                     <CategoryChip category={p.category} />

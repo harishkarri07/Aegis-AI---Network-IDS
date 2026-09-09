@@ -11,6 +11,7 @@ import { Packet, AttackCategory, EngineStatus, NetworkInterfaceInfo } from '../t
 import { TrafficChart } from './TrafficChart';
 import { AnomalyChart } from './AnomalyChart';
 import { PlainAlert } from './AlertBox';
+import { formatLocalTime, formatLocalTimeWithZone, timeAgo } from '../lib/time-format';
 import {
   Button,
   Card,
@@ -45,18 +46,6 @@ interface LiveMonitorProps {
   engineStatus: EngineStatus | null;
 }
 
-function timeAgo(ts?: string): string | null {
-  if (!ts) return null;
-  const t = new Date(ts).getTime();
-  if (!Number.isFinite(t)) return null;
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
-}
-
 function recentRate(packets: Packet[]): number | null {
   if (packets.length < 2) return null;
   let newest = -Infinity;
@@ -71,19 +60,6 @@ function recentRate(packets: Packet[]): number | null {
   if (!Number.isFinite(newest)) return null;
   const spanMs = Math.max(newest - oldest, 250);
   return Math.round((packets.length / spanMs) * 1000);
-}
-
-function fmtTime(ts: string) {
-  try {
-    return new Date(ts).toLocaleTimeString([], { hour12: false });
-  } catch {
-    return ts;
-  }
-}
-
-function fmtClock(ts: string) {
-  const s = ts && ts.length >= 19 ? ts.substring(11, 19) : fmtTime(ts);
-  return s;
 }
 
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({
@@ -354,7 +330,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                     )}
                   >
                     <span className="text-micro font-mono text-muted tabular-nums w-[62px] shrink-0 hidden sm:inline">
-                      {fmtClock(p.timestamp)}
+                      {formatLocalTime(p.timestamp)}
                     </span>
                     <CategoryChip category={p.category} className="shrink-0" />
                     <span className={cn('flex-1 min-w-0 truncate text-caption', isAttack ? 'text-primary font-medium' : 'text-secondary')}>
@@ -376,7 +352,7 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
                             { label: 'Protocol', value: p.protocol },
                             ...(p.rule_triggered ? ([{ label: 'Rule', value: p.rule_triggered }] as const) : []),
                             ...(p.is_anomaly ? ([{ label: 'Anomaly score', value: p.iso_score?.toFixed(3) ?? '—' }] as const) : []),
-                            { label: 'Time (UTC)', value: fmtTime(p.timestamp) }
+                            { label: 'Detected at', value: formatLocalTimeWithZone(p.timestamp) }
                           ]}
                         />
                         <div className="pt-2 border-t border-hairline-faint">

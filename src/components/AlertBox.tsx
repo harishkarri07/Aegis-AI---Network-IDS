@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ScanSearch, Bomb, KeyRound, UserCog, ShieldQuestion } from 'lucide-react';
 import { AttackCategory, Packet } from '../types';
 import { cn, categoryLabel, CategoryChip, Chip, EvidenceList, InlineConfidence, type ChipTone } from './ui';
+import { formatLocalTimeWithZone } from '../lib/time-format';
 
 interface AlertBoxProps {
   packet: Packet;
@@ -44,14 +45,6 @@ const categoryMeta: Record<AttackCategory, { tone: ChipTone; Icon: React.Compone
   }
 };
 
-function fmtTime(ts: string) {
-  try {
-    return new Date(ts).toLocaleTimeString([], { hour12: false });
-  } catch {
-    return ts;
-  }
-}
-
 export const PlainAlert: React.FC<AlertBoxProps> = ({ packet, compact }) => {
   const { category, src_ip, dst_ip, dst_port, protocol, confidence, is_anomaly, timestamp, explanation, rule_triggered, iso_score } = packet;
   const [showEvidence, setShowEvidence] = useState(false);
@@ -69,7 +62,7 @@ export const PlainAlert: React.FC<AlertBoxProps> = ({ packet, compact }) => {
   ];
   if (rule_triggered) evidence.push({ label: 'Rule', value: rule_triggered });
   if (is_anomaly && typeof iso_score === 'number') evidence.push({ label: 'Anomaly score', value: iso_score.toFixed(3) });
-  evidence.push({ label: 'Time (UTC)', value: fmtTime(timestamp) });
+  evidence.push({ label: 'Detected at', value: formatLocalTimeWithZone(timestamp) });
 
   return (
     <article
@@ -86,7 +79,7 @@ export const PlainAlert: React.FC<AlertBoxProps> = ({ packet, compact }) => {
               <Chip tone={meta.tone}>{category}</Chip>
               <span className="text-caption text-muted truncate">Detection</span>
             </div>
-            <span className="text-caption font-mono text-muted tabular-nums">{fmtTime(timestamp)} UTC</span>
+            <span className="text-caption font-mono text-muted tabular-nums">{formatLocalTimeWithZone(timestamp)}</span>
           </div>
 
           <div className="flex items-start gap-2.5">

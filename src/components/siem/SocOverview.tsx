@@ -23,6 +23,7 @@ import {
   SeverityChip,
   StatusDot
 } from '../ui';
+import { formatLocalTime } from '@/lib/time-format';
 
 interface SocOverviewProps {
   metrics: SOCMetrics | null;
@@ -258,7 +259,7 @@ export const SocOverview: React.FC<SocOverviewProps> = ({
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <SeverityChip severity={alert.severity} />
                   <span className="text-micro font-mono text-muted tabular-nums">
-                    {alert.last_seen.substring(11, 19)} UTC
+                    {formatLocalTime(alert.last_seen)}
                   </span>
                 </div>
                 <h5 className="text-caption font-medium text-primary leading-snug line-clamp-2">{alert.title}</h5>

@@ -4,6 +4,7 @@ import React from 'react';
 import { Server, Laptop } from 'lucide-react';
 import { MonitoredDevice } from '@/types';
 import { Button, Card, EmptyState, SectionHeader, StatusChip } from '../ui';
+import { formatLocalDateTime } from '@/lib/time-format';
 
 interface DevicesViewProps {
   devices: MonitoredDevice[];
@@ -71,7 +72,7 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
                   <Row label="Operating system" value={device.operating_system} />
                   <Row label="Agent version" value={`v${device.agent_version || '1.0.0'}`} mono />
                   <Row label="IP address" value={device.ip_address || '127.0.0.1'} mono />
-                  <Row label="Last heartbeat" value={`${device.last_seen.substring(11, 19)} UTC`} mono success={isOnline} />
+                  <Row label="Last heartbeat" value={formatLocalDateTime(device.last_seen)} mono success={isOnline} />
                 </div>
               </Card>
             );

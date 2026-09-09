@@ -13,6 +13,7 @@ import {
   SeverityChip,
   StatusChip
 } from '../ui';
+import { formatLocalDateTime } from '@/lib/time-format';
 
 interface IncidentsViewProps {
   incidents: CorrelatedIncident[];
@@ -47,7 +48,7 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                     <h3 className="text-subtitle font-semibold text-primary tracking-tight">{inc.title}</h3>
                   </div>
                   <div className="text-micro text-muted mt-0.5 tabular-nums">
-                    First seen {inc.first_seen.substring(11, 19)} UTC · Last activity {inc.last_seen.substring(11, 19)} UTC
+                    First seen {formatLocalDateTime(inc.first_seen)} · Last activity {formatLocalDateTime(inc.last_seen)}
                   </div>
                 </div>
               </div>

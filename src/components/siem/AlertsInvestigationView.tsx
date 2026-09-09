@@ -16,6 +16,7 @@ import {
   SeverityChip,
   StatusChip
 } from '../ui';
+import { formatLocalTime } from '@/lib/time-format';
 
 interface AlertsInvestigationViewProps {
   alerts: SecurityAlert[];
@@ -124,7 +125,7 @@ export const AlertsInvestigationView: React.FC<AlertsInvestigationViewProps> = (
                   <h4 className="text-caption font-medium text-primary leading-snug mb-1.5">{alert.title}</h4>
                   <div className="flex items-center justify-between gap-2 text-micro text-muted">
                     <span className="font-mono truncate">{alert.hostname}</span>
-                    <span className="shrink-0 tabular-nums">{alert.event_count} events · {alert.last_seen.substring(11, 19)} UTC</span>
+                    <span className="shrink-0 tabular-nums">{alert.event_count} events · {formatLocalTime(alert.last_seen)}</span>
                   </div>
                 </button>
               );

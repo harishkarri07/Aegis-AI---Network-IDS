@@ -41,6 +41,7 @@ import {
   shouldUpdateLatestAlert,
   type LatestAlertState
 } from '@/lib/alert-state';
+import { formatLocalTime } from '@/lib/time-format';
 
 // Network IDS Components
 import { LiveMonitor } from './LiveMonitor';
@@ -624,7 +625,7 @@ export function AegisDesktopApp({ showWebsiteNavReturn = true }: AegisDesktopApp
                 </Chip>
                 <div className="flex items-center gap-1 text-micro text-muted tabular-nums font-mono">
                   <Clock className="w-3.5 h-3.5" />
-                  {currentTime ? currentTime.toLocaleTimeString() : '--:--:--'} UTC
+                  {currentTime ? formatLocalTime(currentTime) : '--:--:--'}
                 </div>
               </div>
 
