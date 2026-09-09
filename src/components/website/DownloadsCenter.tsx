@@ -54,11 +54,42 @@ const REPO_URL = 'https://github.com/harishkarri07/Aegis-AI---Network-IDS';
 const LATEST_WINDOWS_URL =
   process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL ||
   `${REPO_URL}/releases/latest/download/Aegis-Network-IDS-Setup.exe`;
+const LATEST_MACOS_URL =
+  process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL ||
+  `${REPO_URL}/releases/latest/download/Aegis-Network-IDS.dmg`;
+const LATEST_LINUX_URL =
+  process.env.NEXT_PUBLIC_LINUX_DOWNLOAD_URL ||
+  `${REPO_URL}/releases/latest/download/Aegis-Network-IDS.AppImage`;
 // Stable "all releases" page for users who want older builds or release notes.
 const ALL_RELEASES_URL = `${REPO_URL}/releases`;
+// Public GitHub REST API (CORS-enabled) used to detect whether a real release
+// with installer assets has been published. Download buttons are only wired to
+// actual release asset URLs once this check succeeds.
+const REPO_API_URL = 'https://api.github.com/repos/harishkarri07/Aegis-AI---Network-IDS';
+// Exact asset filenames produced by electron-builder and uploaded by
+// .github/workflows/build-release.yml (publish-release job). Keep in sync.
+const ASSET_WINDOWS = 'Aegis-Network-IDS-Setup.exe';
+const ASSET_MACOS = 'Aegis-Network-IDS.dmg';
+const ASSET_LINUX = 'Aegis-Network-IDS.AppImage';
+
+type ReleaseStatus = 'checking' | 'published' | 'pending';
 
 export function DownloadsCenter() {
   const [detectedOs, setDetectedOs] = useState<'windows' | 'macos' | 'linux' | 'unknown'>('unknown');
+  // Live GitHub Release availability. Starts as 'checking' (hydration-safe:
+  // identical output on server and client), then becomes 'published' only when
+  // the GitHub API confirms a real release containing the installer assets, or
+  // 'pending' otherwise. Download buttons never point at nonexistent files.
+  const [releaseStatus, setReleaseStatus] = useState<ReleaseStatus>('checking');
+  const [releaseTag, setReleaseTag] = useState<string | null>(null);
+  const [assetUrls, setAssetUrls] = useState<{ windows: string | null; macos: string | null; linux: string | null }>({
+    windows: null,
+    macos: null,
+    linux: null,
+  });
+  // Honest version messaging: the intended version is v1.0.0, but the badge
+  // must not claim it is released until the GitHub Release actually exists.
+  const versionLabel = releaseStatus === 'published' && releaseTag ? releaseTag : 'v1.0.0 · pending';
 
   // Data-driven release schema. File names and sizes come from the actual
   // electron-builder output (dist:win). SHA checksums are intentionally not
@@ -77,15 +108,18 @@ export function DownloadsCenter() {
       prereqUrl: 'https://npcap.com'
     },
     macos: {
-      fileName: 'Aegis-Network-IDS.dmg (not yet published)',
-      arch: 'Universal (Apple Silicon M1/M2/M3/M4 & Intel x64)',
-      osSupport: 'macOS Monterey (12.0) or higher',
+      fileName: 'Aegis-Network-IDS.dmg',
+      // The release workflow builds on macos-latest (an arm64 runner) and
+      // electron-builder defaults to the runner architecture — the produced
+      // DMG is Apple Silicon. It is NOT a Universal build.
+      arch: 'Apple Silicon (arm64)',
+      osSupport: 'macOS Monterey (12.0) or higher (Apple Silicon)',
       sizeEstimate: '~90 MB',
       downloadUrl: (process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL || '').trim(),
       prereqUrl: 'https://github.com/harishkarri07/Aegis-AI---Network-IDS/actions'
     },
     linux: {
-      fileName: 'Aegis-Network-IDS.AppImage (not yet published)',
+      fileName: 'Aegis-Network-IDS.AppImage',
       arch: 'x86_64 / amd64',
       osSupport: 'Ubuntu 20.04+ / Debian 11+ / Fedora 36+',
       sizeEstimate: '~82 MB',
@@ -107,6 +141,59 @@ export function DownloadsCenter() {
     }
   }, []);
 
+  // Detect whether the GitHub Release with installer assets actually exists.
+  // Runs client-side only (useEffect) so SSR/CSR output stays identical — no
+  // hydration mismatch. Explicit NEXT_PUBLIC_*_DOWNLOAD_URL overrides are an
+  // operator decision and are trusted as-is.
+  useEffect(() => {
+    let cancelled = false;
+    const checkRelease = async () => {
+      if (
+        (process.env.NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL || '').trim() ||
+        (process.env.NEXT_PUBLIC_MACOS_DOWNLOAD_URL || '').trim() ||
+        (process.env.NEXT_PUBLIC_LINUX_DOWNLOAD_URL || '').trim()
+      ) {
+        if (!cancelled) {
+          setReleaseTag('v1.0.0');
+          setAssetUrls({ windows: LATEST_WINDOWS_URL, macos: LATEST_MACOS_URL, linux: LATEST_LINUX_URL });
+          setReleaseStatus('published');
+        }
+        return;
+      }
+      try {
+        const res = await fetch(`${REPO_API_URL}/releases/latest`, {
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!res.ok) {
+          // 404 → no published release yet; any other failure → be safe.
+          if (!cancelled) setReleaseStatus('pending');
+          return;
+        }
+        const data = (await res.json()) as {
+          tag_name?: string;
+          assets?: Array<{ name: string; browser_download_url: string }>;
+        };
+        if (cancelled) return;
+        const assets = data.assets || [];
+        const urlOf = (name: string) =>
+          assets.find((a) => a.name === name)?.browser_download_url || null;
+        setReleaseTag(data.tag_name || 'v1.0.0');
+        setAssetUrls({
+          windows: urlOf(ASSET_WINDOWS),
+          macos: urlOf(ASSET_MACOS),
+          linux: urlOf(ASSET_LINUX),
+        });
+        setReleaseStatus('published');
+      } catch {
+        if (!cancelled) setReleaseStatus('pending');
+      }
+    };
+    checkRelease();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="py-16 sm:py-20 bg-[#070b14] border-b border-[#1e293b]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -121,6 +208,18 @@ export function DownloadsCenter() {
           </h1>
           <p className="text-sm sm:text-base text-[#94a3b8] leading-relaxed">
             Choose your operating system below to install the Aegis Network IDS desktop application. Native packet capture requires local administrator permissions.
+          </p>
+          <p className="text-[11px] text-[#64748b] font-mono text-center">
+            Installers are hosted on GitHub Releases and published automatically by the release pipeline once a release tag is validated. Source code is available on{' '}
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[#00d4ff] hover:underline font-bold"
+            >
+              GitHub
+            </a>
+            .
           </p>
 
           {/* OS Auto-Detection Callout */}
@@ -157,7 +256,7 @@ export function DownloadsCenter() {
                   <Laptop className="w-6 h-6" />
                 </div>
                 <span className="px-2 py-0.5 rounded bg-[#131d33] text-[#00d4ff] text-xs font-mono font-bold border border-[#00d4ff]/20">
-                  {releaseInfo.version}
+                  {versionLabel}
                 </span>
               </div>
 
@@ -205,22 +304,44 @@ export function DownloadsCenter() {
               </div>
             </div>
 
-            {/* Action Button */}
-            <div className="pt-2">
-              <div className="space-y-2">
+            {/* Action Button — primary CTA only when the release actually exists */}
+            <div className="pt-2 space-y-2">
+              {releaseStatus === 'published' && assetUrls.windows ? (
                 <a
-                  href={releaseInfo.windows.downloadUrl}
+                  href={assetUrls.windows}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
+                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download for Windows</span>
                 </a>
-                <p className="text-[10px] text-center text-[#64748b] font-mono">
-                  Latest stable release · Aegis-Network-IDS-Setup.exe
-                </p>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title="Available once the GitHub Release is published"
+                  className="w-full py-3.5 bg-[#0f172a] text-[#64748b] border border-[#1e293b] rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{releaseStatus === 'checking' ? 'Checking release…' : 'Release pending'}</span>
+                </button>
+              )}
+              <p className="text-[10px] text-center text-[#64748b] font-mono">
+                {releaseStatus === 'published'
+                  ? `${ASSET_WINDOWS} · Windows x64 · hosted on GitHub Releases`
+                  : `${ASSET_WINDOWS} (x64) — published automatically with the GitHub Release.`}
+              </p>
+              <a
+                href={ALL_RELEASES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-1 text-[10px] text-[#00d4ff] hover:underline font-mono focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] rounded"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>View GitHub Releases</span>
+              </a>
             </div>
           </div>
 
@@ -244,7 +365,7 @@ export function DownloadsCenter() {
                   <Laptop className="w-6 h-6" />
                 </div>
                 <span className="px-2 py-0.5 rounded bg-[#131d33] text-[#00d4ff] text-xs font-mono font-bold border border-[#00d4ff]/20">
-                  {releaseInfo.version}
+                  {versionLabel}
                 </span>
               </div>
 
@@ -283,20 +404,44 @@ export function DownloadsCenter() {
               </div>
             </div>
 
-            {/* Action Button */}
-            <div className="pt-2">
+            {/* Action Button — primary CTA only when the release actually exists */}
+            <div className="pt-2 space-y-2">
+              {releaseStatus === 'published' && assetUrls.macos ? (
+                <a
+                  href={assetUrls.macos}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download for macOS</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title="Available once the GitHub Release is published"
+                  className="w-full py-3.5 bg-[#0f172a] text-[#64748b] border border-[#1e293b] rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{releaseStatus === 'checking' ? 'Checking release…' : 'Release pending'}</span>
+                </button>
+              )}
+              <p className="text-[10px] text-center text-[#64748b] font-mono">
+                {releaseStatus === 'published'
+                  ? `${ASSET_MACOS} · Apple Silicon (arm64) · hosted on GitHub Releases`
+                  : `${ASSET_MACOS} (Apple Silicon) — published automatically with the GitHub Release.`}
+              </p>
               <a
                 href={ALL_RELEASES_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full py-3.5 bg-[#131d33] hover:bg-[#1e293b] text-white border border-[#1e3a5f] rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2"
+                className="flex items-center justify-center gap-1 text-[10px] text-[#00d4ff] hover:underline font-mono focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] rounded"
               >
-                <ExternalLink className="w-4 h-4 text-[#00d4ff]" />
-                <span>macOS build — follow Releases</span>
+                <ExternalLink className="w-3 h-3" />
+                <span>View GitHub Releases</span>
               </a>
-              <p className="text-[10px] text-center text-[#64748b] font-mono">
-                Published when a macOS release is tagged (see GitHub Releases).
-              </p>
             </div>
           </div>
 
@@ -320,7 +465,7 @@ export function DownloadsCenter() {
                   <Laptop className="w-6 h-6" />
                 </div>
                 <span className="px-2 py-0.5 rounded bg-[#131d33] text-[#00d4ff] text-xs font-mono font-bold border border-[#00d4ff]/20">
-                  {releaseInfo.version}
+                  {versionLabel}
                 </span>
               </div>
 
@@ -359,20 +504,44 @@ export function DownloadsCenter() {
               </div>
             </div>
 
-            {/* Action Button */}
-            <div className="pt-2">
+            {/* Action Button — primary CTA only when the release actually exists */}
+            <div className="pt-2 space-y-2">
+              {releaseStatus === 'published' && assetUrls.linux ? (
+                <a
+                  href={assetUrls.linux}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3.5 bg-[#00d4ff] hover:bg-[#38bdf8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] text-[#070b14] font-black rounded-xl text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download for Linux</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  title="Available once the GitHub Release is published"
+                  className="w-full py-3.5 bg-[#0f172a] text-[#64748b] border border-[#1e293b] rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{releaseStatus === 'checking' ? 'Checking release…' : 'Release pending'}</span>
+                </button>
+              )}
+              <p className="text-[10px] text-center text-[#64748b] font-mono">
+                {releaseStatus === 'published'
+                  ? `${ASSET_LINUX} · x86_64 · hosted on GitHub Releases`
+                  : `${ASSET_LINUX} (x86_64) — published automatically with the GitHub Release.`}
+              </p>
               <a
                 href={ALL_RELEASES_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full py-3.5 bg-[#131d33] hover:bg-[#1e293b] text-white border border-[#1e3a5f] rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2"
+                className="flex items-center justify-center gap-1 text-[10px] text-[#00d4ff] hover:underline font-mono focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00d4ff] rounded"
               >
-                <ExternalLink className="w-4 h-4 text-[#00d4ff]" />
-                <span>Linux build — follow Releases</span>
+                <ExternalLink className="w-3 h-3" />
+                <span>View GitHub Releases</span>
               </a>
-              <p className="text-[10px] text-center text-[#64748b] font-mono">
-                AppImage / .deb published when a Linux release is tagged.
-              </p>
             </div>
           </div>
         </div>
